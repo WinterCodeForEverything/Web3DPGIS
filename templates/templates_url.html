@@ -1,0 +1,39 @@
+{% block content %}
+<script>
+	//common
+	let csrf_token = "{{ csrf_token }}";
+	
+	//	modelshow/modelshow.html
+	let viewer;
+	let model_url = "{{ model_url }}/tileset.json";
+	let tileset;
+	//let handler;
+	let controller;
+	let relativeheight = {{ relativeheight }};
+	let modelshow_bill_save;
+	
+	//  modelshow/modeltool.html
+	let modeltool_label_url = "{% url 'addLabel' %}";
+	let modeltool_measuring_url = "{% url 'measuring' %}";
+	let modeltool_viewing_url = "{% url 'viewing' %}";
+	let modeltool_analyzetool_url = "{% url 'analyzetool' %}";
+	let modeltool_othertools_url = "{% url 'othertools' %}";
+	
+	//	othertool/adjustheight.html
+	let adjustheight_url = "{% url 'adjustheight' %}";
+	let csrf_token_height = "{{csrf_token}}";
+	
+	//	viewermode/flight.html
+	let getFlightPoints_url = "{% url 'getFlightPoints' %}";
+	let deleteFlightPath_url = "{% url 'deleteFlightPath' %}";
+	let saveFlightPath_url = "{% url 'saveFlightPath' %}";
+	let csrf_token_flight = "{{csrf_token}}";
+	let url_flight = "{{request.get_full_path}}";
+	
+	// addlabel/addLabel.html
+	let addlabel_labelupload_url = "{% url 'addLabelBase' %}";
+	let label_upload_url = "{% url 'label_upload' %}";
+	let delete_savelabel_url = "{% url 'deleteAllLabel' %}";
+	let delete_labelbase_url = "{% url 'deleteLabelBase' %}";
+</script>
+{% endblock %}

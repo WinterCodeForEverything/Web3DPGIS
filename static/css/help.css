@@ -1,0 +1,46 @@
+#pg_header{
+	height:48px;
+	top: 0;
+	left: 0;
+	right: 0;
+	background-color: #b90707; 
+	line-height: 48px;
+}
+#image{
+	width:200px;
+	height:45px;
+}
+#about{
+	position: absolute;
+	right: 50px;
+	display: inline-block;
+	color: white;
+}
+h1{
+	position: absolute;
+	top:90px;
+	height:30px;
+	left:5%;
+	font-family:Microsoft YaHei;
+}
+.line{
+	position: absolute;
+	top:120px;
+	width:100%;
+}
+hr{
+	width:100%;
+	color:#BEBEBE;
+	margin-top:2%;
+}
+.main{
+	position: absolute;
+	left:20%; 
+	width:60%;
+	top:220px;
+}
+p{
+	text-indent:-1em;
+	margin-left: 2em;
+	font-family:Microsoft YaHei;
+}

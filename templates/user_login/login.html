@@ -1,0 +1,43 @@
+{% block content %}
+<html>
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<title>Login</title>
+	<style type="text/css">@import url(/static/css/login.css);</style>
+</head>
+<body>
+	<div class="pg_header">
+		<a target="_blank" href="http://www.southsurvey.com/"><img src="/static/image/logo.png" width="200" height="45"></a>
+		<a id="about">关于(A)</a>
+	</div>
+	<div class="title">
+		<p id="title_header">SouthScene Online</p>
+	</div>
+	
+	<div class="Background">
+	<img src="/static/image/earth.jpg" width="50%" height="70%" id="earth">
+		{% if message %}
+			{{ message }}
+		{% endif %}
+		<div  class="form-wrapper">
+			<form  method="post" action="" enctype="multipart/form-data">
+				{% csrf_token %}
+				{% for field in form %}
+					<div class="fieldWrapper">
+							{{ field.errors }}
+							{{ field.label_tag }} {{ field }}
+							{% if field.help_text %}
+								<p class="help">{{ field.help_text|safe }}</p>
+							{% endif %}
+					</div>
+				{% endfor %}
+				<div class="button-wrapper">
+					<input type="submit" value="登 录" />
+					<a href={% url 'register' %}><input  type="button" value="注 册"></a>
+				</div>
+			</form>
+		</div>
+	</div>
+</body>
+</html>
+{% endblock %}

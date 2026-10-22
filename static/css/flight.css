@@ -1,0 +1,41 @@
+	#flysight {
+		display:none;
+		position: fixed;
+		top: 0px;
+		right: 0px;
+        background: rgba(42, 42, 42, 0.8);
+		padding: 4px;
+        border-radius: .25rem;
+		font-size: 1vw;
+		max-width:50%;
+	}
+	#flightTitle{
+		font-size: 3vw;
+		margin:1vw 0vw;
+		float:left;
+	}
+	#flightPaths{
+		margin:auto;
+		float:right;
+		vertical-align:middle;
+		font-size: 1vw;
+		min-width: 100px;
+        border-radius: .25rem;
+	}
+	.font-white {
+		color:white;
+	}
+	#flightPoints{
+		max-height:30vh;
+		overflow-y:auto;
+	}
+	#flightPoints div:hover{
+		height:40vm;
+		color:black;
+		overflow-y:auto;
+	}
+	#flysight button{
+		font-size: 1vw;
+		background-color:white;
+		padding: .175rem .375rem;
+	}

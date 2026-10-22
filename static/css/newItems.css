@@ -1,0 +1,64 @@
+body{
+	min-width:1000px;
+}
+.pg_header{
+	top: 0;
+	height: 48px;
+	width:100%;
+	background-color: #b90707; 
+	line-height: 48px;
+}
+.pg_header #about{
+	position: absolute;
+	right: 50px;
+	display: inline-block;
+	color: white;
+}
+.title{
+	height:150px;
+}
+.Background{
+	position: absolute;
+	height:75%;
+	width:100%;
+	background-color: #F0F0F0;
+}
+.form_wrapper {
+	position: absolute;
+	top: 25%;
+	left: 40%;
+}
+.form_wrapper .fieldWrapper {
+	font-size: 20px;
+	margin-top: 5%;
+}
+.form_wrapper .button-wrapper_submit input{
+	font-size:20px;
+	width:300px;
+	height:50px;
+	background-color: #b90707;
+	color: white;
+	margin-top: 5%;
+}
+#data_div {
+	width:650px;
+}
+#file_div {
+	float:left;
+}
+#process_border {
+	height: 25px;
+	width: 100px;
+	float:left;
+	border:2px solid gray;
+	margin-right: 10px;
+}
+#process_bar {
+	height: 100%;
+	width: 0px;
+	background: gray;
+}
+#process_text {
+	float:left;
+	font-size: 20px;
+}

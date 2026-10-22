@@ -1,0 +1,57 @@
+<html>
+{% block content %}
+{% load static %}
+<meta charset="utf-8">
+<title>Label</title>
+<head>
+  <style>
+	#save_delete {
+		position:relative;
+		bottom: 0;
+	}
+	.label_image {
+		position: relative;
+		top: 229px;
+		left : 10px;
+		margin-bottom: 20px;
+		width:32px;
+		height:32px;
+		background: rgba(150, 150, 150);
+	}
+  </style>
+  <script>
+  	//global variable
+	let labelArray = [];
+	let billboards = viewer.scene.primitives.add(new Cesium.BillboardCollection());
+	let label_upload_url = "{% url 'label_upload' %}";
+  </script>
+  <script src="/static/js/addlabel.js"></script>
+  <script>
+	(function(){
+		var bill_save = viewer.scene.primitives.add(new Cesium.BillboardCollection());
+		{% for label in labels %}
+			bill_save.add({
+				position : new Cesium.Cartesian3( {{ label.coord_x }}, {{ label.coord_y }}, {{ label.coord_z }} ),
+				image : drawCanvas( {{ label.category }}, "{{ label.name }}" ),
+				//width : name.length * 30 + 60,
+				//height : 80,
+				//eyeoffset : new Cesium.ConstantProperty(new Cesium.Cartesian3(0, 0, -10)),
+			});
+		{% endfor %}
+	}());
+  </script>
+</head>
+<body>
+  <div>
+	<input type="image" src="{% static 'icon/place.png' %}" class = "label_image" onclick = "addPlace()" ><br>
+	<input type="image" src="{% static 'icon/picture.png' %}" class = "label_image" onclick = "addPicture()" ><br>
+	<input type="image" src="{% static 'icon/video.png' %}" class = "label_image" onclick = "addVideo()" ><br>
+  </div>
+  
+  <div id="save_delete">
+	<input type="image" src="{% static 'icon/save.png' %}" class = "label_image" onclick = "saveLabel()" ><br>
+	<input type="image" src="{% static 'icon/delete.png' %}" class = "label_image" onclick = "deleteLabel()" ><br>
+  </div>
+</body>
+{% endblock %}
+</html>

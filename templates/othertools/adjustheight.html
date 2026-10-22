@@ -1,0 +1,13 @@
+<head>
+<link href="/static/css/adjustheight.css" rel="stylesheet">
+</head>
+
+<body>
+	<div id="toolbar">
+		<div>Height</div>
+		<input type="range" min="-100.0" max="100.0" step="1" data-bind="value: height, valueUpdate: 'input'">
+		<input type="text" size="5" data-bind="value: height">
+		<input type="button" value="保存" onclick="saveHeight()">
+	</div>
+<script src="/static/js/adjustheight.js"></script>
+</body>

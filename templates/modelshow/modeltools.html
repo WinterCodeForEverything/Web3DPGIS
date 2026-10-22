@@ -1,0 +1,63 @@
+<html>
+<head>
+<style>
+	#modelToolsManage {
+		position: absolute;
+		top: 0px;
+		left: 0px;
+		width: 4%;
+		height: 100%;
+		background: rgba( 255, 255, 255, 0.8 );
+	}
+	.tools_a {
+		position: relative;
+		left: 25%;		
+		margin-top: 2%;
+	}
+	.tools_image {
+		width: 50%;
+		height: 4%;
+		margin-bottom: 1%;
+		margin-top: 1%;
+	}
+	.tools_text {
+		font-size: 1.1vw;
+	}
+	#modelTools {
+		position: absolute;
+		top: 0;
+		left: 4%;
+		width: 13%;
+		height: 100%;
+		background: rgba(42, 42, 42, 0.7);
+		display: none;
+	}
+</style>
+<script src="/static/js/modeltools.js"></script>
+</head>
+<body>
+	<div id = "modelToolsManage">
+		<a class = "tools_a" id = "label" href="#">
+			<img src="/static/icon/label.png" class = "tools_image" alt="Addlabel" /><br>
+			<p class = "tools_text">标注</p>
+		</a>
+		<a class = "tools_a" id = "measuring" href="#">
+			<img src="/static/icon/measuring.png" class = "tools_image" alt="Measuring" /><br>
+			<p class = "tools_text">测量</p>
+		</a>
+		<a class = "tools_a" id = "viewing" href="#">
+			<img src="/static/icon/viewing.png" class = "tools_image" alt="Viewing" /><br>
+			<p class = "tools_text">浏览</p>
+		</a>
+		<a class = "tools_a" id = "analyze" href="#">
+			<img src="/static/icon/analyze.png" class = "tools_image" alt="Viewing" /><br>
+			<p class = "tools_text">分析</p>
+		</a>
+		<a class = "tools_a" id = "others" href="#">
+			<img src="/static/icon/others.png" class = "tools_image" alt="Viewing" /><br>
+			<p class = "tools_text">其他</p>
+		</a>
+	</div>
+	<div id="modelTools"></div>
+</body>
+</html>

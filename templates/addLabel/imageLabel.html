@@ -1,0 +1,46 @@
+{% block content %}
+<head>
+  {% load staticfiles %}
+  <script src = "{% static 'js/jquery-3.3.1.js' %}"> </script>
+	<script>
+	function onload(){
+		var labelname = $('#labelName');
+		var imagelabel = $('#imageLabel')[0].file;
+		alert(imagelabel.length);
+		//if (typeof (imagelabel) == "undefined" || fileObj.size <= 0) {
+		//	alert("请选择图片");
+		//	return;
+		//}
+		//var formFile = new FormData();
+		////formFile.append("action", "/media/image");
+		//formFile.append("file", imagelabel);
+		////预先发送csrf值，防止出现403错误
+		//$.ajaxSetup({data: {csrfmiddlewaretoken: '{{ csrf_token }}'}});
+		//$.ajax({
+		//	type: 'POST',
+		//	url: "{% url 'file_upload' %}",
+		//	data: {
+		//		'name': labelname,
+		//		'image': formFile,
+		//	},
+		//	dataType: 'JSON',
+		//	processData: false,
+		//	contentType: false,
+		//	success: function(data){
+		//		//location.reload()    //成功刷新界面
+		//		alert(imagelabel.length);
+		//	},
+		//
+		//})
+	}
+	</script>
+</head>
+<body>
+	<form enctype = "multipart/form-data">
+		{% csrf_token %}
+		名称: <input name="labelName"> <br>
+		图片： <input type="file" name="imageLabel" accept = "image/*"> <br>
+		<button id='btn' onclick = "onload()" >确定</button>
+	</form>
+</body>
+{% endblock %}
