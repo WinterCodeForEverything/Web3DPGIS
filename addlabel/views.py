@@ -13,6 +13,10 @@ from modelshow.models import SearchModels
 # Create your views here.
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+def is_ajax( request ):
+	# replacement for HttpRequest.is_ajax(), removed in Django 4.0
+	return request.headers.get( 'x-requested-with' ) == 'XMLHttpRequest'
+
 def showLabel( request ):
 	model_id = request.GET.get( 'id' )
 	model = SearchModels.objects.get( id = model_id )
@@ -44,11 +48,13 @@ def addLabelBase( request ):
 	else:
 		if request.method == 'POST': #request.is_ajax() and 
 			label_image = request.FILES['image']
-			image_name = request.FILES['image'].name
+			image_name = os.path.basename( request.FILES['image'].name )
 			if label_image:
 				#uploadname = datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')
+				label_dir = os.path.join( BASE_DIR, 'media', 'label' )
+				os.makedirs( label_dir, exist_ok = True )
+				Image.open( label_image ).save( os.path.join( label_dir, image_name ) )
 				LabelBase.objects.create( source = image_name )
-				Image.open( label_image ).save( BASE_DIR + 'media/label/' + image_name )
 				return JsonResponse({"status":"success"})
 		return JsonResponse({"status":"failure"})
 		
@@ -70,7 +76,7 @@ def uploadLabel( request ):
 	if not request.session.get( 'username', False ):
 		return HttpResponseRedirect( reverse( 'login' ) )
 	else:
-		if request.is_ajax() and request.method == 'POST':
+		if is_ajax( request ) and request.method == 'POST':
 			labelArray = request.POST.getlist( 'labelArray' )
 			for label in labelArray:
 				labelitem = label.split(',')
@@ -98,11 +104,16 @@ def getLabelData( request ):
 	#if not request.session.get('username', False):
 	#	return HttpResponseRedirect( reverse( 'login' ) )
 	#else:
-	if request.is_ajax():
+	if is_ajax( request ):
 		if request.method == 'POST':
-			labelId = request.POST.get( 'label_id', -1 )
-			modelId = request.POST.get( 'model_id', -1 )
-			data_path = os.path.join( BASE_DIR, 'media', 'label' , modelId , labelId+'.json')
+			try:
+				labelId = int( request.POST.get( 'label_id', -1 ) )
+				modelId = int( request.POST.get( 'model_id', -1 ) )
+			except ValueError:
+				return JsonResponse({"status":"failure"})
+			data_path = os.path.join( BASE_DIR, 'media', 'label' , str(modelId) , str(labelId)+'.json')
+			if not os.path.exists( data_path ):
+				return JsonResponse({"status":"failure"})
 			f = open(data_path,'r',encoding="utf-8")
 			result = f.read()
 			f.close()

@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+staticfiles/
+media/package/*
+media/Data/*
+media/image/*
+media/label/*
+!media/**/.gitkeep
+3d-tiles-samples/
+.DS_Store

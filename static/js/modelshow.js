@@ -1,5 +1,7 @@
 ( function() {
-	Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlMTI5YzA1Yy01MGExLTQ3YWEtYWUzMy1iZmYzOTUyMDU1N2UiLCJpZCI6MzkxMSwic2NvcGVzIjpbImFzciIsImdjIl0sImlhdCI6MTUzOTIxOTU5M30.QRMJyKhjZx-kuAx9v_H_z9q7xFP0ULpWwFRK-pLDZ9o';
+	if (cesium_ion_token) {
+		Cesium.Ion.defaultAccessToken = cesium_ion_token;
+	}
 	viewer = new Cesium.Viewer('cesiumContainer', {
 								animation: false, //是否显示动画控件
 								shouldAnimate : true,
@@ -16,17 +18,19 @@
 								sceneMode: 3, //初始场景模式 1 2D模式 2 2D循环模式 3 3D模式  Cesium.SceneMode
 								fullscreenElement: document.body, //全屏时渲染的HTML元素 暂时没发现用处
 								//shadows: true,
-								//terrainProvider: Cesium.createWorldTerrain(),
-								//imageryProvider:new Cesium.WebMapServiceImageryProvider({
-								//	url : window.location.host + ':8081/geoserver/cesium/wms',							
+								//terrain: Cesium.Terrain.fromWorldTerrain(),   // needs a Cesium ion token
+								//baseLayer: new Cesium.ImageryLayer(new Cesium.WebMapServiceImageryProvider({
+								//	url : window.location.host + ':8081/geoserver/cesium/wms',
 								//	layers: 'cesium:googlemap'// Here just give layer name
-								//}), 
-								imageryProvider : Cesium.createTileMapServiceImageryProvider({
-									url : Cesium.buildModuleUrl('/static/ThirdParty/Cesium/Assets/Textures/NaturalEarthII'),
-								}),
+								//})),
+								baseLayer : Cesium.ImageryLayer.fromProviderAsync(
+									Cesium.TileMapServiceImageryProvider.fromUrl(
+										Cesium.buildModuleUrl('Assets/Textures/NaturalEarthII')
+									)
+								),
 							});
-	tileset = new Cesium.Cesium3DTileset({ url : model_url });
-	tileset.readyPromise.then(function(tileset) {
+	Cesium.Cesium3DTileset.fromUrl(model_url).then(function(loaded) {
+			tileset = loaded;
 			viewer.scene.primitives.add(tileset);
 			var cartographic = Cesium.Cartographic.fromCartesian(tileset.boundingSphere.center);
 			var surface = Cesium.Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude, 0.0);
@@ -34,15 +38,15 @@
 			var translation = Cesium.Cartesian3.subtract(offset, surface, new Cesium.Cartesian3());
 			tileset.modelMatrix = Cesium.Matrix4.fromTranslation(translation);
 			viewer.zoomTo(tileset, new Cesium.HeadingPitchRange(0.0, -0.5, tileset.boundingSphere.radius * 2.0));
-		}).otherwise(function(error) {
+		}).catch(function(error) {
 			console.log(error);
 	});
 	navigationHelpButtonLang();
 	//change the controller
 	if (!judgeDevice()) {//移动设备上禁掉以下几个选项，可以相对更加流畅
-		viewer.scene.fog.enable = false;
+		viewer.scene.fog.enabled = false;
 		viewer.scene.skyAtmosphere.show = false;
-		viewer.scene.fxaa = false;
+		viewer.scene.postProcessStages.fxaa.enabled = false;
 	}
 	else{
 		controller = viewer.scene.screenSpaceCameraController;
