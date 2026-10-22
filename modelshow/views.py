@@ -61,10 +61,14 @@ def show( request ):
 			# load model
 			_, file_name = os.path.split( str(models[0].data) )
 			file_title, _  = os.path.splitext( file_name )
-			url =  '/media/Data/' + file_title + '/tileset.json'
-			if not os.path.exists( BASE_DIR + url ):
-				_, sub_path, _ = os.walk(  BASE_DIR + '/media/Data/' + file_title ).__next__()
-				url = '/media/Data/' + file_title + '/' + sub_path[0]
+			# model_url is the folder holding tileset.json; the template appends '/tileset.json'
+			url = None
+			for root, _, files in os.walk( os.path.join( BASE_DIR, 'media', 'Data', file_title ) ):
+				if 'tileset.json' in files:
+					url = '/media/' + os.path.relpath( root, os.path.join( BASE_DIR, 'media' ) ).replace( '\\', '/' )
+					break
+			if url is None:
+				return HttpResponse('模型正在解压或缺少 tileset.json，请稍候再试！')
 			# load label
 			labels = ModelLabel.objects.filter( model = models[0] )
 			return render( request, 'modelshow/modelshow.html', { 'model_url' : url, 

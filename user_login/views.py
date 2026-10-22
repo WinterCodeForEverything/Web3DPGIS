@@ -2,7 +2,7 @@ from django.shortcuts import render  #, get_object_or_404
 from django.contrib.auth.models import User
 from .models import UserProfile
 from django.contrib import auth
-from .forms import RegistrationForm, LoginForm    #, ProfileForm, PwdChangeForm
+from .forms import RegistrationForm, LoginForm, email_check    #, ProfileForm, PwdChangeForm
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.contrib.auth.decorators import login_required
@@ -38,12 +38,18 @@ def login(request):
 		if form.is_valid():
 			username = form.cleaned_data['username']
 			password = form.cleaned_data['password']
-			
+
+			# the form accepts either a username or an email; authenticate() needs the username
+			if email_check(username):
+				account = User.objects.filter(email__exact=username).first()
+				if account is not None:
+					username = account.username
+
 			user = auth.authenticate(username=username, password=password)
-			
+
 			if user is not None and user.is_active:
 				auth.login(request, user)
-				request.session['username'] = username
+				request.session['username'] = user.username
 				return HttpResponseRedirect( reverse( 'main' ) )		
 			else:
 				# 登陆失败			

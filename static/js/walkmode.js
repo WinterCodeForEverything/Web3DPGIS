@@ -135,9 +135,9 @@ function SetWalkMode(viewer,handler,flag)
 				}];
 			controller.zoomEventTypes = [Cesium.CameraEventType.RIGHT_DRAG, Cesium.CameraEventType.WHEEL, Cesium.CameraEventType.PINCH];
 			controller.rotateEventTypes = Cesium.CameraEventType.LEFT_DRAG;
-			viewer.scene.fog.enable = false;
+			viewer.scene.fog.enabled = false;
 			viewer.scene.skyAtmosphere.show = false;
-			viewer.scene.fxaa = false;
+			viewer.scene.postProcessStages.fxaa.enabled = false;
 		}
 		else{
 			controller = viewer.scene.screenSpaceCameraController;
