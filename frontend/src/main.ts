@@ -1,0 +1,10 @@
+import './cesium-base'
+import 'cesium/Build/Cesium/Widgets/widgets.css'
+import './style.css'
+
+import { createPinia } from 'pinia'
+import { createApp } from 'vue'
+import App from './App.vue'
+import { router } from './router'
+
+createApp( App ).use( createPinia() ).use( router ).mount( '#app' )

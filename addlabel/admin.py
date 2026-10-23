@@ -1,9 +1,14 @@
-#from django.contrib import admin
-#from .models import ModelLabel
-#
-## Register your models here.
-#
-#class LabelAdmin( admin.ModelAdmin ):
-#	list_display = ( 'source', 'coord_x', 'coord_y', 'coord_z', 'property_url', 'model' )
-#
-#admin.site.register( ModelLabel, LabelAdmin )
+from django.contrib.gis import admin
+
+from .models import Label, LabelIcon
+
+
+@admin.register( LabelIcon )
+class LabelIconAdmin( admin.ModelAdmin ):
+	list_display = ( 'name', 'image', 'owner' )
+
+
+@admin.register( Label )
+class LabelAdmin( admin.GISModelAdmin ):
+	list_display = ( 'name', 'model', 'icon' )
+	list_filter = ( 'model', )

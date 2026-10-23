@@ -1,43 +1,27 @@
-"""cloudplat URL Configuration
+"""cloudplat URL configuration.
 
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/2.1/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
+/api/v1/  JSON API (see api/urls.py), with OpenAPI docs at /api/docs/
+/admin/   Django admin
+/media/   uploaded files and generated 3D Tiles with local storage (served by nginx in production)
+anything else: the Vue single-page app (frontend/)
 """
-
-from django.contrib import admin
-from django.urls import path, include, re_path
-from user_login import urls as login_urls
-from modelshow import urls as model_urls
-from viewermode import urls as viewer_urls
-from addlabel import urls as label_urls
-from analyzetool import urls as analyze_urls
-from othertools import urls as other_urls
-
 
 from django.conf import settings
 from django.conf.urls.static import static
+from django.contrib import admin
+from django.urls import include, path, re_path
 
 from . import views
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-	path('', views.index),
-	path('accounts/', include(login_urls) ),
-	path('show/', include(model_urls) ),
-	path('viewer/', include(viewer_urls) ),
-	path('label/', include(label_urls)),
-	path('analyze/', include(analyze_urls)),
-	path('other/', include(other_urls)),
-] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+	path( 'admin/', admin.site.urls ),
+	path( 'api/', include( 'api.urls' ) ),
+]
 
+if settings.STORAGE_BACKEND == 'local':
+	# development convenience; in production nginx serves /media/ (or the bucket serves files with S3 storage)
+	urlpatterns += static( settings.MEDIA_URL, document_root = settings.MEDIA_ROOT )
+
+urlpatterns += [
+	re_path( r'^(?!api/|admin/|media/|static/)(?P<path>.*)$', views.frontend, name = 'frontend' ),
+]

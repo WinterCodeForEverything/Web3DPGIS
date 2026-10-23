@@ -1,8 +1,11 @@
-from django.contrib import admin
-from .models import SearchModels
-# Register your models here.
+from django.contrib.gis import admin
 
-class ModelAdmin( admin.ModelAdmin ):
-	list_display = ( 'name', 'image', 'data', 'canSee' )  #, 'builder', 'isPublic'
+from .models import Model3D
 
-admin.site.register( SearchModels, ModelAdmin )
+
+@admin.register( Model3D )
+class Model3DAdmin( admin.GISModelAdmin ):
+	list_display = ( 'name', 'owner', 'status', 'is_public', 'is_visible', 'created_at' )
+	list_filter = ( 'status', 'is_public', 'is_visible' )
+	search_fields = ( 'name', 'owner__username' )
+	readonly_fields = ( 'created_at', 'updated_at' )

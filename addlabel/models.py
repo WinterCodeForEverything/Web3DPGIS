@@ -1,18 +1,29 @@
-from django.db import models
-from modelshow.models import SearchModels
-# Create your models here.
+from django.conf import settings
+from django.contrib.gis.db import models
+from modelshow.models import Model3D
 
-class LabelBase( models.Model ):
-	source = models.CharField( max_length = 128 )
-	
 
-class ModelLabel( models.Model ):
+class LabelIcon( models.Model ):
+	"""An icon in the label library; icons without an owner are shared with everyone."""
+	name = models.CharField( max_length = 128, blank = True )
+	image = models.ImageField( upload_to = 'label' )
+	owner = models.ForeignKey( settings.AUTH_USER_MODEL, related_name = 'label_icons', on_delete = models.CASCADE, null = True, blank = True )
+
+	def __str__( self ):
+		return self.name or self.image.name
+
+
+class Label( models.Model ):
+	"""A named marker pinned to a point on a model."""
 	name = models.CharField( max_length = 128 )
-	coord_x = models.FloatField()
-	coord_y = models.FloatField()
-	coord_z = models.FloatField()
-	property_url = models.CharField( max_length = 128 )
-	model = models.ForeignKey( SearchModels, on_delete = models.CASCADE )
-	labelbase = models.ForeignKey( LabelBase, on_delete = models.CASCADE )
+	model = models.ForeignKey( Model3D, related_name = 'labels', on_delete = models.CASCADE )
+	icon = models.ForeignKey( LabelIcon, related_name = 'labels', on_delete = models.SET_NULL, null = True, blank = True )
+	# longitude, latitude, ellipsoidal height (metres)
+	position = models.PointField( srid = 4326, dim = 3, spatial_index = True )
+	properties = models.JSONField( default = dict, blank = True )
 
-	
+	class Meta:
+		ordering = [ 'id' ]
+
+	def __str__( self ):
+		return self.name
