@@ -53,13 +53,19 @@ INSTALLED_APPS = [
 	'django.contrib.sessions',
 	'django.contrib.messages',
 	'django.contrib.staticfiles',
+	'django.contrib.gis',
+
+	'rest_framework',
+	'rest_framework.authtoken',
+	'django_filters',
+	'drf_spectacular',
 
 	'user_login',
 	'modelshow',
 	'viewermode',
 	'addlabel',
-	'othertools',
-	'analyzetool',
+	'processing',
+	'api',
 ]
 
 MIDDLEWARE = [
@@ -78,7 +84,7 @@ ROOT_URLCONF = 'cloudplat.urls'
 TEMPLATES = [
 	{
 		'BACKEND': 'django.template.backends.django.DjangoTemplates',
-		'DIRS': [BASE_DIR / 'templates'],
+		'DIRS': [],
 		'APP_DIRS': True,
 		'OPTIONS': {
 			'context_processors': [
@@ -86,7 +92,6 @@ TEMPLATES = [
 				'django.template.context_processors.request',
 				'django.contrib.auth.context_processors.auth',
 				'django.contrib.messages.context_processors.messages',
-				'cloudplat.context_processors.cesium',
 			],
 		},
 	},
@@ -95,12 +100,12 @@ TEMPLATES = [
 WSGI_APPLICATION = 'cloudplat.wsgi.application'
 
 
-# Database: PostgreSQL (with the PostGIS extension enabled for future spatial features)
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+# Database: PostgreSQL + PostGIS through GeoDjango
+# https://docs.djangoproject.com/en/5.2/ref/contrib/gis/
 
 DATABASES = {
 	'default': {
-		'ENGINE': 'django.db.backends.postgresql',
+		'ENGINE': 'django.contrib.gis.db.backends.postgis',
 		'NAME': env('POSTGRES_DB', 'southcloud'),
 		'USER': env('POSTGRES_USER', ''),
 		'PASSWORD': env('POSTGRES_PASSWORD', ''),
@@ -111,6 +116,13 @@ DATABASES = {
 }
 
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
+
+# GeoDjango needs GDAL and GEOS; Homebrew installs them where ctypes may not look.
+GDAL_LIBRARY_PATH = env('GDAL_LIBRARY_PATH') or None
+GEOS_LIBRARY_PATH = env('GEOS_LIBRARY_PATH') or None
+for _name, _lib in (('GDAL_LIBRARY_PATH', 'libgdal.dylib'), ('GEOS_LIBRARY_PATH', 'libgeos_c.dylib')):
+	if globals()[_name] is None and Path('/opt/homebrew/lib', _lib).exists():
+		globals()[_name] = str(Path('/opt/homebrew/lib', _lib))
 
 
 # Password validation
@@ -138,10 +150,54 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_DIRS = [BASE_DIR / 'static']
+if DEBUG:
+	# staticfiles/ only exists after collectstatic; WhiteNoise warns about it in development
+	import warnings
+	warnings.filterwarnings( 'ignore', message = 'No directory at', module = 'whitenoise.base' )
+# the built Vue app (frontend/dist, from `npm run build`) is served under /static/app/
+FRONTEND_DIST = BASE_DIR / 'frontend' / 'dist'
+STATICFILES_DIRS = [ ( 'app', FRONTEND_DIST ) ] if FRONTEND_DIST.exists() else []
 
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = Path( env( 'MEDIA_ROOT' ) or BASE_DIR / 'media' )
 MEDIA_URL = '/media/'
+
+# Where uploads and generated 3D Tiles are kept:
+#   local  the media/ folder (one server; nginx or Django serves /media/)
+#   s3     an S3-compatible bucket (AWS S3, Aliyun OSS, Tencent COS, Cloudflare R2, SeaweedFS, MinIO …), so any
+#          number of web servers and workers can share it; run `manage.py setup_storage` once to configure the bucket
+STORAGE_BACKEND = env( 'STORAGE_BACKEND', 'local' )
+if STORAGE_BACKEND not in ( 'local', 's3' ):
+	raise ImproperlyConfigured( 'STORAGE_BACKEND must be "local" or "s3".' )
+
+STORAGES = {
+	'default': { 'BACKEND': 'django.core.files.storage.FileSystemStorage' },
+	'staticfiles': { 'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage' },
+}
+if STORAGE_BACKEND == 's3':
+	STORAGES['default'] = {
+		'BACKEND': 'storages.backends.s3.S3Storage',
+		'OPTIONS': {
+			'bucket_name': env( 'S3_BUCKET', '3dpgis' ),
+			'endpoint_url': env( 'S3_ENDPOINT_URL' ) or None,          # empty for AWS itself
+			'region_name': env( 'S3_REGION', 'us-east-1' ),
+			'access_key': env( 'S3_ACCESS_KEY_ID' ),
+			'secret_key': env( 'S3_SECRET_ACCESS_KEY' ),
+			'custom_domain': env( 'S3_PUBLIC_DOMAIN' ) or None,        # CDN or public host serving the bucket, e.g. cdn.example.com
+			'url_protocol': env( 'S3_PUBLIC_PROTOCOL', 'https:' ),
+			'addressing_style': env( 'S3_ADDRESSING_STYLE', 'path' ),   # "path" for self-hosted servers, "virtual" for AWS/OSS/COS
+			'signature_version': 's3v4',
+			# tiles, thumbnails and icons are read by browsers straight from the bucket (see setup_storage),
+			# so their URLs are plain, unsigned links; original uploads under package/ stay private
+			'querystring_auth': False,
+			'default_acl': None,
+			'file_overwrite': False,                                   # two uploads with the same name both survive
+			'object_parameters': { 'CacheControl': 'public, max-age=86400' },
+		},
+	}
+# Prefixes browsers may read directly from the bucket; package/ (original uploads) stays private
+STORAGE_PUBLIC_PREFIXES = [ 'tiles/', 'image/', 'label/', 'Data/' ]
+# Origins allowed to fetch tiles from the bucket (CORS), e.g. https://3d.example.com
+STORAGE_CORS_ORIGINS = env_list( 'STORAGE_CORS_ORIGINS', 'http://localhost:8000,http://127.0.0.1:8000,http://localhost:5173' )
 
 # 3D model archives can be large
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
@@ -152,8 +208,63 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 
 
-# Cesium ion access token (https://ion.cesium.com/tokens); optional, only needed for ion-hosted assets.
-CESIUM_ION_TOKEN = env('CESIUM_ION_TOKEN', '')
+# REST API (Django REST Framework)
+REST_FRAMEWORK = {
+	'DEFAULT_AUTHENTICATION_CLASSES': [
+		'rest_framework.authentication.SessionAuthentication',
+		'rest_framework.authentication.TokenAuthentication',
+	],
+	'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticatedOrReadOnly'],
+	'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
+	'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+	'PAGE_SIZE': 50,
+	'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+	'TEST_REQUEST_DEFAULT_FORMAT': 'json',
+}
+
+SPECTACULAR_SETTINGS = {
+	'TITLE': '3DPGIS API',
+	'DESCRIPTION': 'Upload, process, view and annotate 3D models on a globe.',
+	'VERSION': '1.0.0',
+	'SERVE_INCLUDE_SCHEMA': False,
+	'ENUM_NAME_OVERRIDES': {
+		'ModelStatusEnum': 'modelshow.models.Model3D.Status',
+		'JobStatusEnum': 'processing.models.Job.Status',
+	},
+}
+
+
+# Background processing (Celery with a Redis-compatible broker such as Valkey)
+CELERY_BROKER_URL = env('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = None
+CELERY_TASK_ALWAYS_EAGER = env_bool('CELERY_TASK_ALWAYS_EAGER', False)
+CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+# Converters run as subprocesses, so threads are enough; the prefork pool also fails under macOS "spawn".
+CELERY_WORKER_POOL = env( 'CELERY_WORKER_POOL', 'threads' )
+CELERY_WORKER_CONCURRENCY = int( env( 'CELERY_WORKER_CONCURRENCY', '2' ) )
+
+# Command-line converters used by the processing pipeline
+PIPELINE_NODE_BIN = env('PIPELINE_NODE_BIN', str(BASE_DIR / 'converters' / 'node_modules' / '.bin'))
+PIPELINE_ASSIMP = env('PIPELINE_ASSIMP', 'assimp')
+# Local scratch space for jobs (downloads, extraction, conversion); the system temp folder when empty
+PIPELINE_WORK_DIR = env( 'PIPELINE_WORK_DIR' ) or None
+
+# Where a model without its own georeference is placed (longitude, latitude, height in metres).
+DEFAULT_MODEL_LOCATION = tuple(float(v) for v in env('DEFAULT_MODEL_LOCATION', '113.26,23.13,0').split(','))
+
+MAX_UPLOAD_SIZE = int(env('MAX_UPLOAD_SIZE', str(2 * 1024 ** 3)))
+
+# Archive limits, checked before anything is extracted (protects against "zip bombs")
+PIPELINE_MAX_EXTRACTED_SIZE = int( env( 'PIPELINE_MAX_EXTRACTED_SIZE', str( 20 * 1024 ** 3 ) ) )   # bytes unpacked
+PIPELINE_MAX_ARCHIVE_FILES = int( env( 'PIPELINE_MAX_ARCHIVE_FILES', '100000' ) )
+PIPELINE_MAX_COMPRESSION_RATIO = float( env( 'PIPELINE_MAX_COMPRESSION_RATIO', '200' ) )
+PIPELINE_MIN_FREE_SPACE = int( env( 'PIPELINE_MIN_FREE_SPACE', str( 1024 ** 3 ) ) )                # bytes kept free
+
+# Temporary failures (converter killed, disk full, database blip) are retried with exponential back-off
+PIPELINE_MAX_RETRIES = int( env( 'PIPELINE_MAX_RETRIES', '3' ) )
+PIPELINE_RETRY_BACKOFF = int( env( 'PIPELINE_RETRY_BACKOFF', '30' ) )                              # seconds, doubled each time
 
 
 if not DEBUG:

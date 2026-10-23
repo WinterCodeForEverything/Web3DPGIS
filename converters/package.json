@@ -1,0 +1,11 @@
+{
+  "name": "3dpgis-converters",
+  "private": true,
+  "description": "Command-line converters used by the processing pipeline (processing/converters.py)",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "3d-tiles-tools": "0.5.4",
+    "gltf-pipeline": "4.3.1",
+    "obj2gltf": "3.2.0"
+  }
+}

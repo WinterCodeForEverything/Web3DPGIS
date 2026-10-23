@@ -1,6 +1,12 @@
 Django>=5.2,<5.3
+djangorestframework>=3.16
+drf-spectacular>=0.28
+django-filter>=25
 psycopg[binary]>=3.2
 Pillow>=11
+django-storages[s3]>=1.14
+celery[redis]>=5.5
+py3dtiles[las]>=12
 rarfile>=4.2
 gunicorn>=23
 whitenoise>=6.8

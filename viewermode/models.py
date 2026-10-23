@@ -1,29 +1,30 @@
-from django.db import models
-from modelshow.models import SearchModels
+from django.contrib.gis.db import models
+from django.contrib.postgres.fields import ArrayField
+from modelshow.models import Model3D
 
-# Create your models here.
 
-		
 class FlightPath( models.Model ):
+	"""A named camera tour over a model."""
+	name = models.CharField( max_length = 128 )
+	model = models.ForeignKey( Model3D, related_name = 'flight_paths', on_delete = models.CASCADE )
+
 	class Meta:
-		verbose_name = 'FlightPath'
-		
-	name = models.CharField(  max_length = 128 )
-	model = models.ForeignKey( SearchModels, related_name = 'model_path', on_delete = models.CASCADE )
-	
+		ordering = [ 'id' ]
+		constraints = [ models.UniqueConstraint( fields = [ 'model', 'name' ], name = 'unique_flight_path_name_per_model' ) ]
+
+	def __str__( self ):
+		return self.name
+
 
 class FlightPoint( models.Model ):
+	"""One camera pose: where the camera is and which way it looks."""
+	path = models.ForeignKey( FlightPath, related_name = 'points', on_delete = models.CASCADE )
+	order = models.PositiveIntegerField( default = 0 )
+	# camera position as longitude, latitude, ellipsoidal height (metres)
+	position = models.PointField( srid = 4326, dim = 3 )
+	# camera orientation as Earth-centred (ECEF) unit vectors, as Cesium's camera uses them
+	direction = ArrayField( models.FloatField(), size = 3 )
+	up = ArrayField( models.FloatField(), size = 3 )
+
 	class Meta:
-		verbose_name = 'FlightPoint'
-	
-	#point_id = models.IntegerField( )
-	position_x = models.DecimalField( max_digits = 32, decimal_places = 16 )
-	position_y = models.DecimalField( max_digits = 32, decimal_places = 16 )
-	position_z = models.DecimalField( max_digits = 32, decimal_places = 16 )
-	direction_x = models.DecimalField( max_digits = 32, decimal_places = 16 )
-	direction_y = models.DecimalField( max_digits = 32, decimal_places = 16 )
-	direction_z = models.DecimalField( max_digits = 32, decimal_places = 16 )
-	up_x = models.DecimalField( max_digits = 32, decimal_places = 16 )
-	up_y = models.DecimalField( max_digits = 32, decimal_places = 16 )
-	up_z = models.DecimalField( max_digits = 32, decimal_places = 16 )
-	path = models.ForeignKey( FlightPath, related_name = 'path_point', on_delete = models.CASCADE )
+		ordering = [ 'path', 'order' ]

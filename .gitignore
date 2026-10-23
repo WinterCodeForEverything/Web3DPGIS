@@ -10,3 +10,8 @@ media/label/*
 !media/**/.gitkeep
 3d-tiles-samples/
 .DS_Store
+node_modules/
+frontend/dist/
+media/tiles/*
+media/tmp/*
+e2e-artifacts/
