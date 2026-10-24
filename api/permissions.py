@@ -38,3 +38,10 @@ class IsOwnerOrReadOnly( permissions.BasePermission ):
 		if request.method in permissions.SAFE_METHODS:
 			return True
 		return can_edit( request.user, obj )
+
+
+class IsCreatorOrStaff( permissions.BasePermission ):
+	"""Only the user who created an object (or staff) may use it, e.g. personal measurements."""
+
+	def has_object_permission( self, request, view, obj ):
+		return request.user.is_staff or obj.created_by_id == request.user.id

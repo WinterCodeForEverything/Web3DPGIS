@@ -13,13 +13,13 @@ from rest_framework.views import APIView
 from addlabel.models import Label, LabelIcon
 from processing.models import Job
 from processing.pipeline import start_processing
-from viewermode.models import FlightPath
+from viewermode.models import FlightPath, Measurement
 
 from .filters import Model3DFilter
-from .permissions import IsOwnerOrReadOnly, can_edit, readable_models
+from .permissions import IsCreatorOrStaff, IsOwnerOrReadOnly, can_edit, readable_models
 from .serializers import (
 	FlightPathSerializer, JobDetailSerializer, JobSerializer, LabelIconSerializer, LabelSerializer, LoginSerializer,
-	Model3DCreateSerializer, Model3DSerializer, RegisterSerializer, UserSerializer,
+	MeasurementSerializer, Model3DCreateSerializer, Model3DSerializer, RegisterSerializer, UserSerializer,
 )
 
 
@@ -137,6 +137,27 @@ class FlightPathViewSet( viewsets.ModelViewSet ):
 
 	def get_queryset( self ):
 		return FlightPath.objects.filter( model__in = readable_models( self.request.user ) ).prefetch_related( 'points' )
+
+
+# --- measurements ---------------------------------------------------------------
+
+class MeasurementViewSet( mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin,
+						mixins.DestroyModelMixin, viewsets.GenericViewSet ):
+	"""Your saved measurements; filter with ?model=<id> and ?kind=. Anyone signed in can measure models they can see."""
+	serializer_class = MeasurementSerializer
+	permission_classes = [ permissions.IsAuthenticated, IsCreatorOrStaff ]
+	filterset_fields = [ 'model', 'kind' ]
+	queryset = Measurement.objects.none()    # for schema generation; real rows come from get_queryset
+
+	def get_queryset( self ):
+		user = self.request.user
+		if getattr( self, 'swagger_fake_view', False ):
+			return Measurement.objects.all()
+		measurements = Measurement.objects.filter( model__in = readable_models( user ) )
+		return measurements if user.is_staff else measurements.filter( created_by = user )
+
+	def perform_create( self, serializer ):
+		serializer.save( created_by = self.request.user )
 
 
 # --- jobs ---------------------------------------------------------------------

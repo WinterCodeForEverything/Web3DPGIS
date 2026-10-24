@@ -10,6 +10,7 @@ router.register( 'models', views.Model3DViewSet, basename = 'model' )
 router.register( 'labels', views.LabelViewSet, basename = 'label' )
 router.register( 'label-icons', views.LabelIconViewSet, basename = 'label-icon' )
 router.register( 'flight-paths', views.FlightPathViewSet, basename = 'flight-path' )
+router.register( 'measurements', views.MeasurementViewSet, basename = 'measurement' )
 router.register( 'jobs', views.JobViewSet, basename = 'job' )
 
 urlpatterns = [
