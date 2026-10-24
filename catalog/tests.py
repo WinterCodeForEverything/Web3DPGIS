@@ -8,7 +8,7 @@ from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TransactionTestCase, override_settings
 
-from processing.geodesy import enu_to_ecef_matrix, geodetic_to_ecef
+from core.geodesy import enu_to_ecef_matrix, geodetic_to_ecef
 
 OLD_SCHEMA = [ ( 'modelshow', '0012_auto_20181212_0906' ), ( 'addlabel', '0006_auto_20190412_1508' ), ( 'viewermode', '0001_initial' ) ]
 GATE = ( 113.26, 23.13, 20.0 )   # where the 2019 label and camera pose sit

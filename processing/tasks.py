@@ -5,7 +5,7 @@ from django.conf import settings
 
 from .errors import is_transient
 from .models import Job
-from .pipeline import mark_finished, mark_retrying, mark_started, run_job
+from .jobs import job_kind, mark_finished, mark_retrying, mark_started, run_job
 
 logger = logging.getLogger( __name__ )
 
@@ -31,7 +31,7 @@ def process_job( self, job_id ):
 			logger.warning( 'Job %s attempt %s failed, retrying in %s s: %s', job_id, job.attempts, delay, exc )
 			mark_retrying( job, exc, delay, max_attempts )
 			# Retry ends this run and re-queues the task after `delay` (eager mode re-runs it at once)
-			raise self.retry( countdown = delay )
+			raise self.retry( countdown = delay, queue = job_kind( job.kind ).queue )
 		logger.exception( 'Job %s failed', job_id )
 		if is_transient( exc ):
 			exc = f'{exc} (gave up after {job.attempts} attempts)'

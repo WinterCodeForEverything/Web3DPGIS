@@ -6,7 +6,7 @@ from django.db import migrations, models
 
 
 def forwards( apps, schema_editor ):
-	from processing.geodesy import ecef_to_geodetic
+	from core.geodesy import ecef_to_geodetic
 
 	LabelIcon = apps.get_model( 'addlabel', 'LabelIcon' )
 	Label = apps.get_model( 'addlabel', 'Label' )
@@ -22,7 +22,7 @@ def forwards( apps, schema_editor ):
 
 
 def backwards( apps, schema_editor ):
-	from processing.geodesy import geodetic_to_ecef
+	from core.geodesy import geodetic_to_ecef
 
 	LabelIcon = apps.get_model( 'addlabel', 'LabelIcon' )
 	Label = apps.get_model( 'addlabel', 'Label' )

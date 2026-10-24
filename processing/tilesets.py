@@ -3,7 +3,7 @@ import json
 import math
 import os
 
-from .geodesy import ecef_to_geodetic
+from core.geodesy import ecef_to_geodetic
 
 
 def find_tileset( directory ):

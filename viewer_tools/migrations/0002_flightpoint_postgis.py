@@ -6,7 +6,7 @@ from django.db import migrations, models
 
 
 def forwards( apps, schema_editor ):
-	from processing.geodesy import ecef_to_geodetic
+	from core.geodesy import ecef_to_geodetic
 
 	FlightPoint = apps.get_model( 'viewermode', 'FlightPoint' )
 	for order, p in enumerate( FlightPoint.objects.order_by( 'path_id', 'id' ) ):
@@ -18,7 +18,7 @@ def forwards( apps, schema_editor ):
 
 
 def backwards( apps, schema_editor ):
-	from processing.geodesy import geodetic_to_ecef
+	from core.geodesy import geodetic_to_ecef
 
 	FlightPoint = apps.get_model( 'viewermode', 'FlightPoint' )
 	for p in FlightPoint.objects.all():

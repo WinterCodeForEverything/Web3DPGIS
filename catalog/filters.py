@@ -4,7 +4,7 @@ from django.contrib.gis.measure import D
 from django_filters import rest_framework as filters
 from rest_framework.exceptions import ValidationError
 
-from catalog.models import Model3D
+from .models import Model3D
 
 
 def _parse_numbers( value, count, name ):

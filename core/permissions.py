@@ -1,28 +1,13 @@
-from django.db.models import Q
+"""Permission rules that work for any app: the owner of an object (or of what it belongs to) may change it."""
 from rest_framework import permissions
-
-from catalog.models import Model3D
-
-
-def readable_models( user ):
-	"""Models the user may see: public and visible ones, plus their own (staff see everything)."""
-	qs = Model3D.objects.all()
-	if user.is_authenticated and user.is_staff:
-		return qs
-	visible = Q( is_public = True, is_visible = True )
-	if user.is_authenticated:
-		visible |= Q( owner = user )
-	return qs.filter( visible )
 
 
 def owner_of( obj ):
-	"""The user who controls obj: a model's owner, or the owner of the model it belongs to."""
-	if isinstance( obj, Model3D ):
+	"""The user who controls obj: its own owner, or the owner of what it belongs to (obj.model, obj.path …)."""
+	if hasattr( obj, 'owner_id' ):
 		return obj.owner
-	model = getattr( obj, 'model', None ) or getattr( getattr( obj, 'path', None ), 'model', None )
-	if model is not None:
-		return model.owner
-	return getattr( obj, 'owner', None )
+	parent = getattr( obj, 'model', None ) or getattr( obj, 'path', None )
+	return owner_of( parent ) if parent is not None else None
 
 
 def can_edit( user, obj ):

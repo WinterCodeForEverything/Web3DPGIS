@@ -2,7 +2,7 @@ from django.db import transaction
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
 
-from processing.storage import delete_prefix
+from core.storage import delete_prefix
 
 from .models import Model3D
 

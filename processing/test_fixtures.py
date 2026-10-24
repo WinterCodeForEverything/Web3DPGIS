@@ -4,7 +4,7 @@ import json
 import struct
 import zipfile
 
-from .geodesy import enu_to_ecef_matrix
+from core.geodesy import enu_to_ecef_matrix
 
 
 def glb_triangle():

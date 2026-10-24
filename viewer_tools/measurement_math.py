@@ -6,7 +6,7 @@ import math
 
 from django.contrib.gis.geos import LineString, Point, Polygon
 
-from processing.geodesy import A, E2, geodetic_to_ecef
+from core.geodesy import A, E2, geodetic_to_ecef
 
 # how many points each kind takes: (fewest, most)
 POINT_COUNTS = {

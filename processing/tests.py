@@ -12,6 +12,7 @@ from collections import namedtuple
 from unittest import mock
 
 from django.contrib.auth.models import User
+from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import OperationalError
@@ -20,10 +21,12 @@ from rest_framework.test import APIClient
 
 from catalog.models import Model3D
 
-from . import pipeline, storage, test_fixtures
+from core import storage
+from core.geodesy import ecef_to_geodetic
+
+from . import converters, jobs, tasks, test_fixtures, tiling
 from .converters import ConversionError, _run
 from .errors import TransientError, is_transient
-from .geodesy import ecef_to_geodetic
 from .tilesets import tileset_location
 
 GUANGZHOU = { 'longitude': 113.26, 'latitude': 23.13, 'height': 15.0 }
@@ -233,7 +236,7 @@ class LimitsAndRetryTests( PipelineTestBase ):
 		self.assert_ready_near( self.upload( 'site.zip', test_fixtures.tiles_zip( lon = 116.4, lat = 39.9 ) ), 116.4, 39.9 )
 
 	def test_temporary_failure_is_retried_then_succeeds( self ):
-		real_run_job = pipeline.run_job
+		real_run_job = jobs.run_job
 		calls = []
 
 		def flaky( job ):
@@ -259,10 +262,51 @@ class LimitsAndRetryTests( PipelineTestBase ):
 	def test_retry_message_while_waiting( self ):
 		job = self.upload( 'tri.glb', test_fixtures.glb_triangle() ).jobs.get()
 		job.attempts = 1
-		pipeline.mark_retrying( job, TransientError( 'database went away' ), 60, 4 )
+		jobs.mark_retrying( job, TransientError( 'database went away' ), 60, 4 )
 		r = self.client.get( f'/api/v1/jobs/{job.pk}/' )
 		self.assertEqual( ( r.data['status'], r.data['stage'], r.data['attempts'] ), ( 'queued', 'waiting to retry', 1 ) )
 		self.assertIn( 'Retrying in 60 s (attempt 2 of 4)', r.data['message'] )
+
+
+class ExtensionPointTests( PipelineTestBase ):
+	"""How another module plugs in: its own job kind that hands over to tiling, and new input formats."""
+
+	def test_a_new_job_kind_can_hand_its_result_to_tiling( self ):
+		# e.g. reconstruction: the job produces a mesh as the model's source, then the tiling job publishes it
+		def reconstruct( job, report ):
+			report.step( 'reconstructing', 50 )
+			job.model.source_file.save( 'reconstructed.glb', ContentFile( test_fixtures.glb_triangle() ), save = True )
+			jobs.start_job( job.model, 'tiling' )
+
+		with mock.patch.dict( jobs._kinds ), mock.patch.object( tasks.process_job, 'apply_async', wraps = tasks.process_job.apply_async ) as queued:
+			jobs.register_job_kind( 'reconstruction', reconstruct, queue = 'gpu' )
+			model = Model3D.objects.create( name = 'photos', owner = self.user, source_file = 'package/photos.zip' )
+			with self.captureOnCommitCallbacks( execute = True ):
+				jobs.start_job( model, 'reconstruction' )
+		model.refresh_from_db()
+		self.assertEqual( [ ( j.kind, j.status ) for j in model.jobs.order_by( 'id' ) ], [ ( 'reconstruction', 'succeeded' ), ( 'tiling', 'succeeded' ) ] )
+		self.assertEqual( model.status, 'ready' )
+		self.assertEqual( [ c.kwargs['queue'] for c in queued.call_args_list ], [ 'gpu', 'celery' ] )
+
+	def test_unknown_job_kind( self ):
+		model = Model3D.objects.create( name = 'x', owner = self.user, source_file = 'package/x.zip' )
+		with self.assertRaisesMessage( LookupError, "No job kind 'nope'" ):
+			jobs.start_job( model, 'nope' )
+
+	def test_a_new_input_format_can_be_uploaded_and_tiled( self ):
+		def build( src ):
+			# pretend .tri files are GLB under another name
+			glb = os.path.join( src.work_dir, 'model.glb' )
+			shutil.copy( src.path, glb )
+			converters.glb_to_tileset( glb, src.out_dir, src.placement, src.report.log )
+			return os.path.join( src.out_dir, 'tileset.json' )
+
+		with mock.patch.object( tiling, '_handlers', list( tiling._handlers ) ):
+			tiling.register_input_handler( tiling.InputHandler( 'tri', ( '.tri', ), lambda d: tiling.find_first_file( d, ( '.tri', ) ), build ), before = 'mesh' )
+			self.assertEqual( [ h.name for h in tiling.input_handlers() ], [ '3d-tiles', 'point-cloud', 'tri', 'mesh' ] )
+			model = self.upload( 'shape.tri', test_fixtures.glb_triangle(), placement = GUANGZHOU )
+		self.assert_ready_near( model, 113.26, 23.13 )
+		self.assertNotIn( '.tri', tiling.supported_extensions() )
 
 
 class ErrorClassificationTests( TestCase ):

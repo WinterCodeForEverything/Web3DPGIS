@@ -9,7 +9,7 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.management.base import BaseCommand, CommandError
 
-from processing import storage
+from core import storage
 
 
 class Command( BaseCommand ):
