@@ -1,9 +1,8 @@
 from django.db import models
-from modelshow.models import Model3D
 
 
 class Job( models.Model ):
-	"""One background processing run for a model (extract, convert, tile)."""
+	"""One background job on a model; `kind` says what it does (see jobs.register_job_kind), e.g. tiling."""
 
 	class Status( models.TextChoices ):
 		QUEUED = 'queued', 'Queued'
@@ -11,7 +10,9 @@ class Job( models.Model ):
 		SUCCEEDED = 'succeeded', 'Succeeded'
 		FAILED = 'failed', 'Failed'
 
-	model = models.ForeignKey( Model3D, related_name = 'jobs', on_delete = models.CASCADE )
+	# by label, so this app does not import the catalog app
+	model = models.ForeignKey( 'modelshow.Model3D', related_name = 'jobs', on_delete = models.CASCADE )
+	kind = models.CharField( max_length = 32, default = 'tiling', help_text = 'What the job does, e.g. tiling' )
 	status = models.CharField( max_length = 16, choices = Status.choices, default = Status.QUEUED )
 	progress = models.PositiveSmallIntegerField( default = 0 )
 	attempts = models.PositiveSmallIntegerField( default = 0, help_text = 'How many times the pipeline has started for this job' )

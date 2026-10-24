@@ -3,7 +3,7 @@ import json
 import math
 import os
 
-from .geodesy import ecef_to_geodetic
+from core.geodesy import ecef_to_geodetic
 
 
 def find_tileset( directory ):
@@ -17,7 +17,7 @@ def find_tileset( directory ):
 	return None
 
 
-def _mat_apply( m, p ):
+def _apply_matrix( m, p ):
 	# m is a column-major 4x4 matrix
 	x, y, z = p
 	return (
@@ -46,7 +46,7 @@ def tileset_location( path ):
 		return None
 	transform = root.get( 'transform' )
 	if transform and len( transform ) == 16:
-		centre = _mat_apply( transform, centre )
+		centre = _apply_matrix( transform, centre )
 	if math.hypot( *centre ) < 1000.0:
 		# a local, non-georeferenced tileset (near the Earth's centre)
 		return None

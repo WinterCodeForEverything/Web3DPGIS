@@ -1,5 +1,4 @@
-import './cesium-base'
-import 'cesium/Build/Cesium/Widgets/widgets.css'
+import './cesiumBaseUrl'
 import './style.css'
 
 import { createPinia } from 'pinia'

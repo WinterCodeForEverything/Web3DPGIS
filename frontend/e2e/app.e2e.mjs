@@ -90,22 +90,86 @@ try {
 	await page.waitForFunction( () => location.pathname.startsWith( '/models/' ), { timeout: 120000 } )
 	check( 'upload → processing → viewer', true )
 
+	// the three.js model viewer opens by default
+	await page.waitForFunction( () => document.querySelector( '.toolbar' ) && !document.querySelector( '.loading' ), { timeout: 30000 } )
+	check( 'model viewer shows the model', ( await textOf( '.title' ) ).includes( 'E2E cube' ) && !( await page.$( '.overlay' ) ), await textOf( '.title' ) )
+	await shot( '1-model-viewer.png' )
+	const modelUrl = page.url()
+	const apiLabels = () => page.evaluate( async () => ( await ( await fetch( `/api/v1/labels/?model=${location.pathname.split( '/' )[2]}` ) ).json() ).results )
+
+	// labels in the model viewer use the same editor, popup and API as the map viewer
+	await clickText( 'Labels' )
+	await page.type( 'input[placeholder="e.g. Main entrance"]', 'Lobby' )
+	await clickText( 'Place labels' )
+	const stage = await ( await page.$( '.stage canvas' ) ).boundingBox()
+	await page.mouse.click( stage.x + stage.width / 2, stage.y + stage.height / 2 )
+	await page.waitForFunction( () => document.body.textContent.includes( '1 labels on this model' ), { timeout: 10000 } ).catch( () => {} )
+	const [ lobby ] = await apiLabels()
+	// the cube is 20 m wide and placed at 113.26, 23.13, so a point on it is within ~0.0003° and 0–20 m up
+	check( 'model viewer: label placed on the model and saved', lobby?.name === 'Lobby' && Math.abs( lobby.position.longitude - 113.26 ) < 0.0005
+		&& Math.abs( lobby.position.latitude - 23.13 ) < 0.0005 && lobby.position.height > -1 && lobby.position.height < 21, JSON.stringify( lobby?.position ) )
+	await page.waitForSelector( '.model-label', { timeout: 10000 } )
+	await page.click( '.model-label' )
+	await page.waitForSelector( '.popup', { timeout: 5000 } )
+	await clickText( 'Edit properties' )
+	await clickText( 'Add property' )
+	await page.type( '.popup input[aria-label="Property name"]', 'floor' )
+	await page.type( '.popup input[aria-label="Property value"]', '1' )
+	await clickText( 'Save' )
+	await page.waitForFunction( () => document.querySelector( '.popup table' )?.textContent.includes( 'floor' ), { timeout: 5000 } ).catch( () => {} )
+	check( 'model viewer: label properties edited and saved', ( await apiLabels() )[0]?.properties?.floor === '1', JSON.stringify( ( await apiLabels() )[0]?.properties ) )
+	await shot( '1-model-viewer-labels.png' )
+	await page.click( '.popup button[aria-label=Close]' )
+
+	// measuring in the model viewer works like the map viewer's and saves to the same place
+	await clickText( 'Measure' )
+	await clickText( 'Distance' )
+	const stageClick = async ( dx, dy, button = 'left' ) => {
+		await page.mouse.click( stage.x + stage.width / 2 + dx, stage.y + stage.height / 2 + dy, { button } )
+		await sleep( 300 )
+	}
+	// below the Lobby label, which sits at the centre and would take the click
+	await stageClick( -80, 60 ); await stageClick( 0, 110 ); await stageClick( 80, 60 ); await stageClick( 80, 60, 'right' )
+	await page.waitForFunction( () => /Distance: [\d.]+ m \(/.test( document.querySelector( '.results' )?.textContent ?? '' ), { timeout: 5000 } ).catch( () => {} )
+	check( 'model viewer: distance measured per segment', /Distance: [\d.]+ m \([\d.]+ m \+ [\d.]+ m\)/.test( await textOf( '.results' ) ), await textOf( '.results' ) )
+	const segmentLabels = await page.$$eval( '.stage div span', els => els.map( e => e.textContent ).filter( t => /^(Total )?[\d.]+ m$/.test( t ) ) )
+	check( 'model viewer: segment and total labels drawn', segmentLabels.length === 3 && segmentLabels.some( t => t.startsWith( 'Total' ) ), segmentLabels.join( ', ' ) )
+	await sleep( 500 )
+	const modelMeasurements = await page.evaluate( async () => ( await ( await fetch( `/api/v1/measurements/?model=${location.pathname.split( '/' )[2]}` ) ).json() ).results )
+	check( 'model viewer: measurement saved', modelMeasurements.length === 1 && modelMeasurements[0].kind === 'distance' && modelMeasurements[0].points.length === 3,
+		JSON.stringify( modelMeasurements.map( m => [ m.kind, m.points.length ] ) ) )
+	await shot( '1-model-viewer-measure.png' )
+	await page.click( '.panel button[aria-label="Close tool"]' )
+
+	// the GIS tools live in the map viewer
+	await clickText( 'Map (GIS)' )
+	await page.waitForFunction( () => location.search === '?viewer=map' && document.querySelector( '.cesium-viewer' ), { timeout: 30000 } )
 	await page.waitForSelector( '.toolbar', { timeout: 30000 } )
 	await sleep( 6000 )
-	check( 'viewer shows the model', ( await textOf( '.title' ) ).includes( 'E2E cube' ), await textOf( '.title' ) )
+	check( 'map viewer shows the model', ( await textOf( '.title' ) ).includes( 'E2E cube' ), await textOf( '.title' ) )
 	await shot( '1-viewer.png' )
 
 	// 5. measuring
 	await clickText( 'Measure' )
 	await clickText( 'Distance' )
-	await canvasClick( -30, 0 ); await canvasClick( 30, 10 ); await canvasClick( 30, 10, 'right' )
-	check( 'distance measurement', /Distance: [\d.]+ m/.test( await textOf( '.results' ) ), await textOf( '.results' ) )
+	await canvasClick( -60, 20 ); await canvasClick( 0, -20 ); await canvasClick( 60, 20 ); await canvasClick( 60, 20, 'right' )
+	check( 'distance measurement', /Distance: [\d.]+ m \([\d.]+ m \+ [\d.]+ m\)/.test( await textOf( '.results' ) ), await textOf( '.results' ) )
+	await shot( '2-distance.png' )
 	await clickText( 'Area' )
 	await canvasClick( -40, -20 ); await canvasClick( 40, -20 ); await canvasClick( 40, 30 ); await canvasClick( 40, 30, 'right' )
 	check( 'area measurement is non-zero', /Area: (?!0\.00 )[\d.]+ m²/.test( await textOf( '.results' ) ), await textOf( '.results' ) )
 	await clickText( 'Coordinates' )
 	await canvasClick( 0, 0 )
 	check( 'point coordinates near the placement', /Point: 113\.26\d*, 23\.13\d*/.test( await textOf( '.results' ) ), await textOf( '.results' ) )
+	// each finished measurement is saved: a path as one line with its segment lengths, an area as a closed polygon
+	const measurements = await page.evaluate( async () => ( await ( await fetch( `/api/v1/measurements/?model=${location.pathname.split( '/' )[2]}` ) ).json() ).results )
+	const byKind = Object.fromEntries( measurements.map( m => [ m.kind, m ] ) )
+	check( 'measurements saved', measurements.length === 4 && byKind.distance?.points.length === 3 && byKind.distance.results.segment_lengths_m.length === 2
+		&& byKind.area?.points.length === 3 && byKind.area.results.area_m2 > 0 && byKind.point?.points.length === 1, JSON.stringify( measurements.map( m => [ m.kind, m.points.length, m.results ] ) ) )
+	await page.click( '.panel button[aria-label="Close tool"]' )
+	await clickText( 'Measure' )
+	await page.waitForFunction( () => document.querySelectorAll( '.results li' ).length === 4, { timeout: 10000 } ).catch( () => {} )
+	check( 'saved measurements come back when the tool reopens', ( await page.$$( '.results li' ) ).length === 4, await textOf( '.results' ) )
 	await shot( '2-measure.png' )
 
 	// 6. labels
@@ -113,8 +177,9 @@ try {
 	await page.type( 'input[placeholder="e.g. Main entrance"]', 'Front door' )
 	await clickText( 'Place labels' )
 	await canvasClick( 10, 5 )
-	await page.waitForFunction( () => document.body.textContent.includes( '1 labels on this model' ), { timeout: 10000 } ).catch( () => {} )
-	check( 'label placed and saved', ( await page.content() ).includes( '1 labels on this model' ) )
+	// the label placed in the model viewer is already there, so this is the second
+	await page.waitForFunction( () => document.body.textContent.includes( '2 labels on this model' ), { timeout: 10000 } ).catch( () => {} )
+	check( 'label placed and saved', ( await page.content() ).includes( '2 labels on this model' ) )
 
 	// 7. height offset
 	await clickText( 'Height' )
@@ -157,6 +222,12 @@ try {
 	await page.keyboard.down( 'w' ); await sleep( 600 ); await page.keyboard.up( 'w' )
 	await clickText( 'Measure' )
 	check( 'switching tools ends walk mode', !( await page.content() ).includes( 'Stop walking' ) )
+
+	// labels placed in the map viewer show in the model viewer too
+	await page.goto( modelUrl, { waitUntil: 'networkidle0' } )
+	await page.waitForFunction( () => document.querySelectorAll( '.model-label' ).length === 2, { timeout: 30000 } ).catch( () => {} )
+	const shown = await page.$$eval( '.model-label', els => els.map( e => e.textContent.trim() ).sort().join( ', ' ) )
+	check( 'model viewer shows labels from both viewers', shown === 'Front door, Lobby', shown )
 
 	// 11. the list shows the model; deleting it removes it
 	await page.goto( BASE + '/', { waitUntil: 'networkidle0' } )

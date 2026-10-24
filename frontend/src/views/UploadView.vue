@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ApiError, api } from '@/api/client'
+import { ApiError } from '@/api/http'
+import { modelsApi } from '@/api/models'
 import type { Job } from '@/api/types'
 
 const ACCEPT = '.zip,.tar,.tar.gz,.tgz,.rar,.glb,.gltf,.obj,.fbx,.dae,.3ds,.ply,.stl,.las,.laz'
@@ -20,7 +21,7 @@ let poll: number | undefined
 const isPointCloud = computed( () => /\.(las|laz)$/i.test( file.value?.name ?? '' ) )
 const needsPlacement = computed( () => !!file.value && !/\.(zip|tar|tgz|tar\.gz|rar|las|laz)$/i.test( file.value.name ) )
 
-function pick( e: Event, which: 'file' | 'thumbnail' ) {
+function chooseFile( e: Event, which: 'file' | 'thumbnail' ) {
 	const chosen = ( e.target as HTMLInputElement ).files?.[0] ?? null
 	if ( which === 'thumbnail' ) {
 		thumbnail.value = chosen
@@ -44,7 +45,7 @@ async function submit() {
 	}
 	if ( form.srs.trim() ) data.append( 'source_srs', form.srs.trim() )
 	try {
-		const model = await api.uploadModel( data, f => { uploadFraction.value = f } )
+		const model = await modelsApi.uploadModel( data, f => { uploadFraction.value = f } )
 		modelId.value = model.id
 		job.value = model.latest_job
 		watchJob()
@@ -56,7 +57,7 @@ async function submit() {
 
 async function watchJob() {
 	if ( !job.value ) return
-	job.value = await api.job( job.value.id )
+	job.value = await modelsApi.job( job.value.id )
 	if ( job.value.status === 'succeeded' ) router.push( `/models/${modelId.value}` )
 	else if ( job.value.status === 'failed' ) busy.value = false
 	else poll = window.setTimeout( watchJob, 1000 )
@@ -70,14 +71,14 @@ onUnmounted( () => window.clearTimeout( poll ) )
 		<h1>Upload a model</h1>
 		<form class="card" @submit.prevent="submit">
 			<label class="field">File
-				<input type="file" :accept="ACCEPT" required @change="pick( $event, 'file' )" />
+				<input type="file" :accept="ACCEPT" required @change="chooseFile( $event, 'file' )" />
 				<span class="muted">3D Tiles in a zip/tar/rar archive, a mesh (glTF, GLB, OBJ, FBX, DAE, 3DS, PLY, STL) or a point cloud (LAS, LAZ).</span>
 			</label>
 			<label class="field">Name
 				<input v-model="form.name" maxlength="128" required />
 			</label>
 			<label class="field">Thumbnail (optional)
-				<input type="file" accept="image/*" @change="pick( $event, 'thumbnail' )" />
+				<input type="file" accept="image/*" @change="chooseFile( $event, 'thumbnail' )" />
 			</label>
 			<fieldset class="field placement">
 				<legend>Placement on the globe {{ needsPlacement ? '(recommended for meshes)' : '(only used if the file has no position)' }}</legend>

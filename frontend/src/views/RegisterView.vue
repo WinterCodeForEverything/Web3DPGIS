@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ApiError } from '@/api/client'
+import { ApiError } from '@/api/http'
 import { useAuth } from '@/stores/auth'
 
 const auth = useAuth()
