@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
-import { ApiError, api } from '@/api/client'
+import { ApiError } from '@/api/http'
+import { modelsApi } from '@/api/models'
 import type { Model3D } from '@/api/types'
 import { useAuth } from '@/stores/auth'
 
@@ -19,7 +20,7 @@ async function load() {
 	loading.value = true
 	error.value = ''
 	try {
-		const page = await api.models( {
+		const page = await modelsApi.models( {
 			search: search.value.trim(),
 			mine: mine.value || undefined,
 			near: near.value.trim() || undefined,
@@ -45,17 +46,17 @@ function useMyLocation() {
 }
 
 async function toggleVisible( model: Model3D ) {
-	Object.assign( model, await api.updateModel( model.id, { is_visible: !model.is_visible } ) )
+	Object.assign( model, await modelsApi.updateModel( model.id, { is_visible: !model.is_visible } ) )
 }
 
 async function remove( model: Model3D ) {
 	if ( !confirm( `Delete "${model.name}" and all its files, labels and flight paths?` ) ) return
-	await api.deleteModel( model.id )
+	await modelsApi.deleteModel( model.id )
 	load()
 }
 
 async function reprocess( model: Model3D ) {
-	await api.reprocess( model.id )
+	await modelsApi.reprocess( model.id )
 	load()
 }
 

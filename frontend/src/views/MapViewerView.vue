@@ -1,34 +1,19 @@
 <script setup lang="ts">
 import type * as Cesium from 'cesium'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
-import { computed, markRaw, onBeforeUnmount, onMounted, provide, ref, shallowRef, type Component } from 'vue'
-import { ApiError, api } from '@/api/client'
+import { onBeforeUnmount, onMounted, provide, ref, shallowRef } from 'vue'
+import { ApiError } from '@/api/http'
+import { modelsApi } from '@/api/models'
 import type { Model3D } from '@/api/types'
-import LabelEditor from '@/labels/LabelEditor.vue'
 import LabelPopup from '@/labels/LabelPopup.vue'
 import { labelHostKey } from '@/labels/labelHost'
 import { createLabelStore, labelStoreKey } from '@/labels/labelStore'
 import { cesiumLabelHost, drawLabels } from '@/cesium/labelLayer'
 import { createMapViewer, loadTileset, mapViewerKey, type MapViewerContext } from '@/cesium/mapViewer'
-import FlightTool from '@/cesium/tools/FlightTool.vue'
-import HeightTool from '@/cesium/tools/HeightTool.vue'
-import MeasureTool from '@/cesium/tools/MeasureTool.vue'
-import SightlineTool from '@/cesium/tools/SightlineTool.vue'
-import ViewshedTool from '@/cesium/tools/ViewshedTool.vue'
-import WalkTool from '@/cesium/tools/WalkTool.vue'
+import { MAP_TOOLS } from '@/cesium/tools'
+import ToolDock from '@/components/ToolDock.vue'
 
 const props = defineProps<{ id: number }>()
-
-interface ToolEntry { id: string; title: string; component: Component; editOnly?: boolean }
-const TOOLS: ToolEntry[] = [
-	{ id: 'measure', title: 'Measure', component: markRaw( MeasureTool ) },
-	{ id: 'labels', title: 'Labels', component: markRaw( LabelEditor ), editOnly: true },
-	{ id: 'flight', title: 'Flight', component: markRaw( FlightTool ) },
-	{ id: 'walk', title: 'Walk', component: markRaw( WalkTool ) },
-	{ id: 'sightline', title: 'Sight line', component: markRaw( SightlineTool ) },
-	{ id: 'viewshed', title: 'Viewshed', component: markRaw( ViewshedTool ) },
-	{ id: 'height', title: 'Height', component: markRaw( HeightTool ), editOnly: true },
-]
 
 const container = ref<HTMLDivElement>()
 const model = shallowRef<Model3D | null>( null )
@@ -40,9 +25,6 @@ const activeTool = ref<string | null>( null )
 const error = ref( '' )
 const toast = ref<{ message: string; kind: string } | null>( null )
 let toastTimer: number | undefined
-
-const tools = computed( () => TOOLS.filter( t => !t.editOnly || model.value?.can_edit ) )
-const active = computed( () => TOOLS.find( t => t.id === activeTool.value ) ?? null )
 
 function notify( message: string, kind: 'info' | 'error' = 'info' ) {
 	toast.value = { message, kind }
@@ -63,7 +45,7 @@ provide( labelHostKey, cesiumLabelHost( contextProxy ) )
 
 onMounted( async () => {
 	try {
-		model.value = await api.model( props.id )
+		model.value = await modelsApi.model( props.id )
 		if ( model.value.status !== 'ready' || !model.value.tileset_url ) {
 			error.value = `This model is ${model.value.status}; it can be viewed once processing has finished.`
 			return
@@ -85,30 +67,13 @@ onBeforeUnmount( () => {
 	window.clearTimeout( toastTimer )
 } )
 
-function toggleTool( id: string ) {
-	// switching unmounts the previous tool panel, whose session then removes its handlers and drawings
-	activeTool.value = activeTool.value === id ? null : id
-}
 </script>
 
 <template>
 	<div class="viewer-page">
 		<div ref="container" class="globe" />
 
-		<aside v-if="context" class="toolbar" aria-label="Tools">
-			<button v-for="t in tools" :key="t.id" :class="{ on: activeTool === t.id }" :aria-pressed="activeTool === t.id" @click="toggleTool( t.id )">
-				{{ t.title }}
-			</button>
-		</aside>
-
-		<section v-if="context && active" class="panel" :aria-label="active.title">
-			<header class="row">
-				<h2 style="margin: 0">{{ active.title }}</h2>
-				<span class="spacer" />
-				<button class="link" aria-label="Close tool" @click="activeTool = null">✕</button>
-			</header>
-			<component :is="active.component" :key="active.id" />
-		</section>
+		<ToolDock v-if="context" v-model:active="activeTool" :tools="MAP_TOOLS" :model="model" />
 
 		<LabelPopup v-if="context" />
 
@@ -124,11 +89,6 @@ function toggleTool( id: string ) {
 <style scoped>
 .viewer-page { position: relative; height: 100%; }
 .globe { position: absolute; inset: 0; }
-.toolbar { position: absolute; top: 12px; left: 12px; display: flex; flex-direction: column; gap: 6px; z-index: 2; }
-.toolbar button { min-width: 96px; justify-content: center; background: rgba(27, 31, 39, 0.85); color: #fff; border-color: transparent; }
-.toolbar button.on { background: var(--accent); }
-.panel { position: absolute; top: 12px; left: 124px; width: 320px; max-height: calc(100% - 24px); overflow: auto; z-index: 2;
-	background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
 .title { position: absolute; bottom: 30px; left: 12px; z-index: 2; background: rgba(27, 31, 39, 0.75); color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 14px; }
 .title .muted { color: #c8ccd4; }
 .overlay { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); z-index: 3; }

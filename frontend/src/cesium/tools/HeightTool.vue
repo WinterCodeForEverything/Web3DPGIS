@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { inject, onUnmounted, ref, watch } from 'vue'
-import { ApiError, api } from '@/api/client'
+import { ApiError } from '@/api/http'
+import { modelsApi } from '@/api/models'
 import { setHeightOffset, mapViewerKey } from '../mapViewer'
 
 // Lift or lower the model to sit correctly on the ground; owners can save the offset.
@@ -21,7 +22,7 @@ async function save() {
 	busy.value = true
 	error.value = ''
 	try {
-		ctx.model.value = await api.updateModel( ctx.model.value.id, { height_offset: offset.value } )
+		ctx.model.value = await modelsApi.updateModel( ctx.model.value.id, { height_offset: offset.value } )
 		ctx.notify( 'Height saved' )
 	} catch ( e ) {
 		error.value = e instanceof ApiError ? e.message : String( e )

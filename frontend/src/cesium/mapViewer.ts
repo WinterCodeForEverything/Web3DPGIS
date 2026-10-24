@@ -1,7 +1,8 @@
 // Viewer setup and helpers shared by all tools.
 import * as Cesium from 'cesium'
 import type { InjectionKey, ShallowRef } from 'vue'
-import type { CameraPose, GeoPoint, Model3D } from '@/api/types'
+import type { GeoPoint, Model3D } from '@/api/types'
+import type { CameraPose } from '@/cesium/flightPathsApi'
 import type { Vec3 } from '../geo/geometry'
 
 export interface MapViewerContext {

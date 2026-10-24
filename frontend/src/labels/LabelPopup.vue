@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { inject, ref, watch } from 'vue'
-import { ApiError } from '@/api/client'
+import { ApiError } from '@/api/http'
 import { labelHostKey } from './labelHost'
 import { labelStoreKey } from './labelStore'
 

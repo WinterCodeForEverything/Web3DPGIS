@@ -1,4 +1,5 @@
-// Shapes returned by the Django REST API (/api/v1/). See /api/docs/ for the full schema.
+// Shapes shared across features, as the Django REST API (/api/v1/) returns them. Each feature keeps its own types
+// next to its API calls (e.g. labels/labelsApi.ts). See /api/docs/ for the full schema.
 
 export interface GeoPoint {
 	longitude: number
@@ -48,50 +49,6 @@ export interface Model3D {
 	latest_job: Job | null
 	can_edit: boolean
 	distance_m: number | null
-}
-
-export interface LabelIcon {
-	id: number
-	name: string
-	image: string
-	owner: string | null
-	can_edit: boolean
-}
-
-export interface Label {
-	id: number
-	model: number
-	name: string
-	icon: number | null
-	icon_url: string | null
-	position: GeoPoint
-	properties: Record<string, unknown>
-}
-
-export interface CameraPose {
-	position: GeoPoint
-	direction: [ number, number, number ]
-	up: [ number, number, number ]
-}
-
-export interface FlightPath {
-	id: number
-	model: number
-	name: string
-	points: CameraPose[]
-}
-
-export type MeasurementKind = 'point' | 'distance' | 'area' | 'height' | 'circle'
-
-/** A saved measurement: its clicked points in order, and the values the server worked out from them (metres, m²). */
-export interface Measurement {
-	id: number
-	model: number
-	kind: MeasurementKind
-	name: string
-	points: GeoPoint[]
-	results: Record<string, number | number[]>
-	created_at: string
 }
 
 export interface Page<T> {

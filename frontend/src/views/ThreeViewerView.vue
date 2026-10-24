@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
-import { ApiError, api } from '@/api/client'
+import { ApiError } from '@/api/http'
+import { modelsApi } from '@/api/models'
 import type { Model3D } from '@/api/types'
-import LabelEditor from '@/labels/LabelEditor.vue'
 import LabelPopup from '@/labels/LabelPopup.vue'
 import { labelHostKey } from '@/labels/labelHost'
 import { createLabelStore, labelStoreKey } from '@/labels/labelStore'
-import MeasurePanel from '@/measurements/MeasurePanel.vue'
 import { measureHostKey } from '@/measurements/measureHost'
 import { drawLabels, threeLabelHost } from '@/three/labelLayer'
 import { threeMeasureHost } from '@/three/measuring'
 import { ModelViewer } from '@/three/ModelViewer'
+import { MODEL_TOOLS } from '@/three/tools'
+import ToolDock from '@/components/ToolDock.vue'
 
 const props = defineProps<{ id: number }>()
 
@@ -24,7 +25,7 @@ const autoRotate = ref( false )
 const grid = ref( false )
 const wireframe = ref( false )
 // the open tool panel; each tool takes over clicks on the model while it is open
-const activeTool = ref<'measure' | 'labels' | null>( null )
+const activeTool = ref<string | null>( null )
 const toast = ref<{ message: string; kind: string } | null>( null )
 let toastTimer: number | undefined
 let removeLabels: ( () => void ) | undefined
@@ -42,13 +43,9 @@ provide( labelHostKey, threeLabelHost( viewer, model, notify ) )
 // measuring uses the same panel, maths and saved measurements as the map viewer
 provide( measureHostKey, threeMeasureHost( viewer, model, notify ) )
 
-function toggleTool( tool: 'measure' | 'labels' ) {
-	activeTool.value = activeTool.value === tool ? null : tool
-}
-
 onMounted( async () => {
 	try {
-		model.value = await api.model( props.id )
+		model.value = await modelsApi.model( props.id )
 		if ( model.value.status !== 'ready' || !model.value.tileset_url ) {
 			error.value = `This model is ${model.value.status}; it can be viewed once processing has finished.`
 			return
@@ -82,24 +79,12 @@ watch( wireframe, on => viewer.value?.setWireframe( on ) )
 	<div class="viewer-page">
 		<div ref="container" class="stage" />
 
-		<aside v-if="viewer" class="toolbar" aria-label="View options">
+		<ToolDock v-if="viewer" v-model:active="activeTool" :tools="MODEL_TOOLS" :model="model" label="View options and tools">
 			<button @click="viewer.resetView()">Reset view</button>
 			<button :class="{ on: autoRotate }" :aria-pressed="autoRotate" @click="autoRotate = !autoRotate">Rotate</button>
 			<button :class="{ on: grid }" :aria-pressed="grid" @click="grid = !grid">Grid</button>
 			<button :class="{ on: wireframe }" :aria-pressed="wireframe" @click="wireframe = !wireframe">Wireframe</button>
-			<button :class="{ on: activeTool === 'measure' }" :aria-pressed="activeTool === 'measure'" @click="toggleTool( 'measure' )">Measure</button>
-			<button v-if="model?.can_edit" :class="{ on: activeTool === 'labels' }" :aria-pressed="activeTool === 'labels'" @click="toggleTool( 'labels' )">Labels</button>
-		</aside>
-
-		<section v-if="viewer && activeTool" class="panel" :aria-label="activeTool === 'measure' ? 'Measure' : 'Labels'">
-			<header class="row">
-				<h2 style="margin: 0">{{ activeTool === 'measure' ? 'Measure' : 'Labels' }}</h2>
-				<span class="spacer" />
-				<button class="link" aria-label="Close tool" @click="activeTool = null">✕</button>
-			</header>
-			<MeasurePanel v-if="activeTool === 'measure'" />
-			<LabelEditor v-else />
-		</section>
+		</ToolDock>
 
 		<LabelPopup v-if="viewer" />
 
@@ -121,11 +106,6 @@ watch( wireframe, on => viewer.value?.setWireframe( on ) )
 <style scoped>
 .viewer-page { position: relative; height: 100%; }
 .stage { position: absolute; inset: 0; overflow: hidden; }
-.toolbar { position: absolute; top: 12px; left: 12px; display: flex; flex-direction: column; gap: 6px; z-index: 2; }
-.toolbar button { min-width: 96px; justify-content: center; background: rgba(27, 31, 39, 0.85); color: #fff; border-color: transparent; }
-.toolbar button.on { background: var(--accent); }
-.panel { position: absolute; top: 12px; left: 124px; width: 320px; max-height: calc(100% - 24px); overflow: auto; z-index: 2;
-	background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
 .loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2; width: 220px; text-align: center;
 	background: rgba(27, 31, 39, 0.85); color: #fff; padding: 10px 14px; border-radius: 6px; font-size: 14px; display: flex; flex-direction: column; gap: 8px; }
 .hint { position: absolute; bottom: 30px; right: 12px; margin: 0; z-index: 2; color: #c8ccd4; font-size: 13px; }

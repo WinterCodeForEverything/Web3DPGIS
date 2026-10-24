@@ -1,8 +1,9 @@
 // A model's labels, shared by every viewer: loading, placing, editing and deleting all go through here,
 // so the 3D model viewer and the map viewer save labels the same way. Viewers only draw them and report clicks.
 import { shallowRef, type InjectionKey, type ShallowRef } from 'vue'
-import { api } from '@/api/client'
-import type { GeoPoint, Label } from '@/api/types'
+import { labelsApi } from '@/labels/labelsApi'
+import type { GeoPoint } from '@/api/types'
+import type { Label } from '@/labels/labelsApi'
 
 export interface NewLabel {
 	name: string
@@ -28,30 +29,30 @@ export function createLabelStore( modelId: number ): LabelStore {
 	const selected = shallowRef<Label | null>( null )
 
 	async function reload() {
-		const page = await api.labels( modelId )
+		const page = await labelsApi.labels( modelId )
 		labels.value = page.results
 		if ( selected.value ) selected.value = labels.value.find( l => l.id === selected.value!.id ) ?? null
 	}
 
 	async function create( label: NewLabel ) {
-		const saved = await api.createLabel( { model: modelId, name: label.name.trim() || 'Label', icon: label.icon, position: label.position } )
+		const saved = await labelsApi.createLabel( { model: modelId, name: label.name.trim() || 'Label', icon: label.icon, position: label.position } )
 		await reload()
 		return saved
 	}
 
 	async function updateProperties( id: number, properties: Record<string, unknown> ) {
-		await api.updateLabel( id, { properties } )
+		await labelsApi.updateLabel( id, { properties } )
 		await reload()
 	}
 
 	async function remove( id: number ) {
-		await api.deleteLabel( id )
+		await labelsApi.deleteLabel( id )
 		if ( selected.value?.id === id ) selected.value = null
 		await reload()
 	}
 
 	async function removeAll() {
-		await Promise.all( labels.value.map( l => api.deleteLabel( l.id ) ) )
+		await Promise.all( labels.value.map( l => labelsApi.deleteLabel( l.id ) ) )
 		selected.value = null
 		await reload()
 	}

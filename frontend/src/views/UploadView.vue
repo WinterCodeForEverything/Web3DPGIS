@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ApiError, api } from '@/api/client'
+import { ApiError } from '@/api/http'
+import { modelsApi } from '@/api/models'
 import type { Job } from '@/api/types'
 
 const ACCEPT = '.zip,.tar,.tar.gz,.tgz,.rar,.glb,.gltf,.obj,.fbx,.dae,.3ds,.ply,.stl,.las,.laz'
@@ -44,7 +45,7 @@ async function submit() {
 	}
 	if ( form.srs.trim() ) data.append( 'source_srs', form.srs.trim() )
 	try {
-		const model = await api.uploadModel( data, f => { uploadFraction.value = f } )
+		const model = await modelsApi.uploadModel( data, f => { uploadFraction.value = f } )
 		modelId.value = model.id
 		job.value = model.latest_job
 		watchJob()
@@ -56,7 +57,7 @@ async function submit() {
 
 async function watchJob() {
 	if ( !job.value ) return
-	job.value = await api.job( job.value.id )
+	job.value = await modelsApi.job( job.value.id )
 	if ( job.value.status === 'succeeded' ) router.push( `/models/${modelId.value}` )
 	else if ( job.value.status === 'failed' ) busy.value = false
 	else poll = window.setTimeout( watchJob, 1000 )

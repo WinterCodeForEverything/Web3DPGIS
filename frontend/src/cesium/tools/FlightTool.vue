@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import * as Cesium from 'cesium'
 import { inject, onMounted, onUnmounted, ref } from 'vue'
-import { ApiError, api } from '@/api/client'
-import type { CameraPose, FlightPath } from '@/api/types'
+import { ApiError } from '@/api/http'
+import { flightPathsApi } from '@/cesium/flightPathsApi'
+import type { CameraPose, FlightPath } from '@/cesium/flightPathsApi'
 import { currentPose, fromGeoPoint, poseOrientation, mapViewerKey } from '../mapViewer'
 import { createSession } from '../toolSession'
 
@@ -20,7 +21,7 @@ const error = ref( '' )
 let stopRequested = false
 
 async function load() {
-	paths.value = ( await api.flightPaths( ctx.model.value.id ) ).results
+	paths.value = ( await flightPathsApi.flightPaths( ctx.model.value.id ) ).results
 }
 onMounted( load )
 
@@ -33,7 +34,7 @@ function addView() {
 async function save() {
 	error.value = ''
 	try {
-		await api.createFlightPath( ctx.model.value.id, name.value.trim() || `Tour ${paths.value.length + 1}`, draft.value )
+		await flightPathsApi.createFlightPath( ctx.model.value.id, name.value.trim() || `Tour ${paths.value.length + 1}`, draft.value )
 		draft.value = []
 		name.value = ''
 		session.clear()
@@ -76,7 +77,7 @@ function stop() {
 
 async function remove( path: FlightPath ) {
 	if ( !confirm( `Delete flight path "${path.name}"?` ) ) return
-	await api.deleteFlightPath( path.id )
+	await flightPathsApi.deleteFlightPath( path.id )
 	await load()
 }
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { inject, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
-import { ApiError, api } from '@/api/client'
+import { ApiError } from '@/api/http'
+import { measurementsApi } from '@/measurements/measurementsApi'
 import { useAuth } from '@/stores/auth'
 import { ecefToGeodetic, geodeticToEcef, type Vec3 } from '@/geo/geometry'
 import { measureHostKey } from './measureHost'
@@ -43,7 +44,7 @@ async function complete() {
 	entries.value = [ entry, ...entries.value ]
 	if ( !auth.user ) return
 	try {
-		const saved = await api.createMeasurement( { model: host.model.value!.id, kind: modeInfo( m ).kind, points: pts.map( ecefToGeodetic ) } )
+		const saved = await measurementsApi.createMeasurement( { model: host.model.value!.id, kind: modeInfo( m ).kind, points: pts.map( ecefToGeodetic ) } )
 		entry.id = saved.id
 		entries.value = [ ...entries.value ]
 	} catch ( e ) {
@@ -79,7 +80,7 @@ watch( mode, resetDraft )
 onMounted( async () => {
 	if ( !auth.user ) return
 	try {
-		const saved = ( await api.measurements( host.model.value!.id ) ).results
+		const saved = ( await measurementsApi.measurements( host.model.value!.id ) ).results
 		if ( destroyed ) return
 		const loaded = saved.map( s => ( {
 			...drawEntry( modeOfKind( s.kind ), s.points.map( p => geodeticToEcef( p.longitude, p.latitude, p.height ) ) ), id: s.id,
@@ -99,7 +100,7 @@ onUnmounted( () => {
 
 async function remove( entry: Entry ) {
 	try {
-		if ( entry.id !== null ) await api.deleteMeasurement( entry.id )
+		if ( entry.id !== null ) await measurementsApi.deleteMeasurement( entry.id )
 	} catch ( e ) {
 		host.notify( e instanceof ApiError ? e.message : String( e ), 'error' )
 		return

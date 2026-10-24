@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { inject, onMounted, onUnmounted, ref } from 'vue'
-import { ApiError, api } from '@/api/client'
-import type { LabelIcon } from '@/api/types'
+import { ApiError } from '@/api/http'
+import { labelsApi } from '@/labels/labelsApi'
+import type { LabelIcon } from '@/labels/labelsApi'
 import { labelHostKey } from './labelHost'
 import { labelStoreKey } from './labelStore'
 
@@ -16,7 +17,7 @@ const placing = ref( false )
 const error = ref( '' )
 
 onMounted( async () => {
-	icons.value = ( await api.labelIcons() ).results
+	icons.value = ( await labelsApi.labelIcons() ).results
 	iconId.value = icons.value[0]?.id ?? null
 } )
 
@@ -27,7 +28,7 @@ async function uploadIcon( e: Event ) {
 	form.append( 'image', file )
 	form.append( 'name', file.name.replace( /\.[^.]+$/, '' ) )
 	try {
-		const icon = await api.uploadLabelIcon( form )
+		const icon = await labelsApi.uploadLabelIcon( form )
 		icons.value.push( icon )
 		iconId.value = icon.id
 	} catch ( err ) {

@@ -1,6 +1,6 @@
 // What a measurement shows, independent of the viewer: the line for the results list and the shapes to draw.
 // Points are Earth-centred (ECEF) metres, so the same maths serves the map viewer and the 3D model viewer.
-import type { MeasurementKind } from '@/api/types'
+import type { MeasurementKind } from '@/measurements/measurementsApi'
 import {
 	boundsCentre, circle, ecefToGeodetic, formatArea, formatLength, midpoint, polygonArea, polylineLength, segmentLengths,
 	surfaceArea, triangle, upAt, type Vec3,

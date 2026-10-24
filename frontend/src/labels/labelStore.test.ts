@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Label } from '@/api/types'
+import type { Label } from '@/labels/labelsApi'
 
 const server = vi.hoisted( () => ( { labels: [] as Label[], nextId: 1 } ) )
 
-vi.mock( '@/api/client', () => ( {
-	api: {
+vi.mock( '@/labels/labelsApi', () => ( {
+	labelsApi: {
 		labels: vi.fn( async () => ( { count: server.labels.length, next: null, previous: null, results: [ ...server.labels ] } ) ),
 		createLabel: vi.fn( async ( input: { model: number; name: string; icon: number | null; position: Label['position'] } ) => {
 			const label: Label = { id: server.nextId++, icon_url: null, properties: {}, ...input }
@@ -20,7 +20,7 @@ vi.mock( '@/api/client', () => ( {
 	},
 } ) )
 
-const { api } = await import( '@/api/client' )
+const { labelsApi } = await import( './labelsApi' )
 const { createLabelStore } = await import( './labelStore' )
 
 const here = { longitude: 113.26, latitude: 23.13, height: 5 }
@@ -35,7 +35,7 @@ describe( 'label store', () => {
 	it( 'saves a new label for its model and reloads the list', async () => {
 		const store = createLabelStore( 7 )
 		await store.create( { name: '  Front door ', icon: null, position: here } )
-		expect( api.createLabel ).toHaveBeenCalledWith( { model: 7, name: 'Front door', icon: null, position: here } )
+		expect( labelsApi.createLabel ).toHaveBeenCalledWith( { model: 7, name: 'Front door', icon: null, position: here } )
 		expect( store.labels.value.map( l => l.name ) ).toEqual( [ 'Front door' ] )
 	} )
 
