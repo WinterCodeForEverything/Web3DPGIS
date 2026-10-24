@@ -28,7 +28,7 @@ POINTCLOUD_EXTENSIONS = ( '.las', '.laz' )
 SUPPORTED_EXTENSIONS = ARCHIVE_EXTENSIONS + tuple( MESH_EXTENSIONS ) + POINTCLOUD_EXTENSIONS
 
 
-def tiles_dir( model ):
+def tiles_prefix( model ):
 	"""Storage prefix holding a model's tileset."""
 	return f'tiles/{model.pk}'
 
@@ -60,7 +60,7 @@ class JobReporter:
 		self.job.save( update_fields = [ 'log' ] )
 
 
-def _find_first( directory, extensions ):
+def _find_first_file( directory, extensions ):
 	for root, dirs, files in sorted( os.walk( directory ) ):
 		dirs.sort()
 		for name in sorted( files ):
@@ -69,7 +69,7 @@ def _find_first( directory, extensions ):
 	return None
 
 
-def _wrap_local_tileset( tileset, out_dir, location ):
+def _georeference_tileset( tileset, out_dir, location ):
 	"""Place a tileset that has no georeference by pointing a new root tileset at it with a transform."""
 	with open( tileset, encoding = 'utf-8' ) as f:
 		inner = json.load( f )
@@ -109,7 +109,7 @@ def run_job( job ):
 		limits = Limits.from_settings()
 		input_dir = os.path.join( work, 'input' )
 		archive = is_archive( model.source_file.name )
-		if storage.is_local( model.source_file.storage ):
+		if storage.is_local_storage( model.source_file.storage ):
 			source = model.source_file.path
 			if not archive:
 				ensure_free_space( work, os.path.getsize( source ), limits )
@@ -132,12 +132,12 @@ def run_job( job ):
 			tileset = os.path.join( out_dir, 'tileset.json' )
 			if tileset_location( tileset ) is None:
 				report.log( 'Tileset has no georeference; placing it at ' + ', '.join( f'{v:.6f}' for v in placement ) )
-				tileset = _wrap_local_tileset( tileset, out_dir, placement )
-		elif ( cloud := _find_first( input_dir, POINTCLOUD_EXTENSIONS ) ):
+				tileset = _georeference_tileset( tileset, out_dir, placement )
+		elif ( cloud := _find_first_file( input_dir, POINTCLOUD_EXTENSIONS ) ):
 			report.step( 'tiling point cloud', 30 )
 			converters.pointcloud_to_tileset( cloud, out_dir, model.source_srs, report.log )
 			tileset = os.path.join( out_dir, 'tileset.json' )
-		elif ( mesh := _find_first( input_dir, tuple( MESH_EXTENSIONS ) ) ):
+		elif ( mesh := _find_first_file( input_dir, tuple( MESH_EXTENSIONS ) ) ):
 			kind = MESH_EXTENSIONS[ os.path.splitext( mesh )[1].lower() ]
 			glb = os.path.join( work, 'model.glb' )
 			report.step( f'converting {kind.upper()} to glTF', 30 )
@@ -160,7 +160,7 @@ def run_job( job ):
 		if location is None and os.path.basename( tileset ) != 'tileset.root.json':
 			raise converters.ConversionError( 'The generated tileset has no position on the globe.' )
 		report.step( 'publishing tiles', 97 )
-		prefix = tiles_dir( model )
+		prefix = tiles_prefix( model )
 		storage.publish_directory( out_dir, prefix, report.log )
 		model.tileset_path = prefix + '/' + os.path.relpath( tileset, out_dir ).replace( os.sep, '/' )
 		model.location = Point( *( location or placement ), srid = 4326 )

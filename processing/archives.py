@@ -50,7 +50,7 @@ def human_size( n ):
 	return f'{n:.1f} TB'
 
 
-def _check_members( names, destination ):
+def _reject_unsafe_paths( names, destination ):
 	# reject entries that would be written outside destination ("zip slip")
 	root = os.path.realpath( destination )
 	for member in names:
@@ -68,7 +68,7 @@ def ensure_free_space( directory, needed, limits ):
 			f'{human_size( free )} free.' )
 
 
-def check_contents( archive_path, sizes, limits ):
+def check_declared_sizes( archive_path, sizes, limits ):
 	"""Validate the declared sizes of an archive's files against the limits before extracting."""
 	total, count = sum( sizes ), len( sizes )
 	if count > limits.max_files:
@@ -95,23 +95,23 @@ def extract( path, destination, limits = None ):
 		if name.endswith( '.zip' ):
 			with zipfile.ZipFile( path ) as archive:
 				infos = [ i for i in archive.infolist() if not i.is_dir() ]
-				_check_members( archive.namelist(), destination )
-				total = check_contents( path, [ i.file_size for i in infos ], limits )
+				_reject_unsafe_paths( archive.namelist(), destination )
+				total = check_declared_sizes( path, [ i.file_size for i in infos ], limits )
 				ensure_free_space( destination, total, limits )
 				# zipfile refuses to inflate an entry past its declared size, so the check above holds
 				archive.extractall( destination )
 		elif name.endswith( ( '.tar', '.tar.gz', '.tgz' ) ):
 			with tarfile.open( path ) as archive:
 				members = archive.getmembers()
-				total = check_contents( path, [ m.size for m in members if m.isfile() ], limits )
+				total = check_declared_sizes( path, [ m.size for m in members if m.isfile() ], limits )
 				ensure_free_space( destination, total, limits )
 				archive.extractall( destination, filter = 'data' )
 		elif name.endswith( '.rar' ):
 			# needs an `unrar`, `unar` or `bsdtar` command on PATH
 			with rarfile.RarFile( path ) as archive:
 				infos = [ i for i in archive.infolist() if not i.is_dir() ]
-				_check_members( archive.namelist(), destination )
-				total = check_contents( path, [ i.file_size for i in infos ], limits )
+				_reject_unsafe_paths( archive.namelist(), destination )
+				total = check_declared_sizes( path, [ i.file_size for i in infos ], limits )
 				ensure_free_space( destination, total, limits )
 				archive.extractall( destination )
 		else:

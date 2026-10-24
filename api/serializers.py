@@ -6,13 +6,13 @@ from django.contrib.auth.models import User
 from django.db import transaction
 from rest_framework import serializers
 
-from addlabel.models import Label, LabelIcon
-from modelshow.models import Model3D
+from labels.models import Label, LabelIcon
+from catalog.models import Model3D
 from processing.models import Job
 from processing.pipeline import SUPPORTED_EXTENSIONS
-from user_login.models import UserProfile
-from viewermode import measure
-from viewermode.models import FlightPath, FlightPoint, Measurement
+from accounts.models import UserProfile
+from viewer_tools import measurement_math
+from viewer_tools.models import FlightPath, FlightPoint, Measurement
 
 from .fields import GeoPointField, Vector3Field
 from .permissions import can_edit, readable_models
@@ -251,15 +251,15 @@ class MeasurementSerializer( serializers.ModelSerializer ):
 
 	def to_representation( self, instance ):
 		data = super().to_representation( instance )
-		data['points'] = [ { 'longitude': x, 'latitude': y, 'height': z } for x, y, z in measure.points_of( instance.geometry ) ]
+		data['points'] = [ { 'longitude': x, 'latitude': y, 'height': z } for x, y, z in measurement_math.measured_points( instance.geometry ) ]
 		return data
 
 	def validate( self, attrs ):
 		kind, points = attrs['kind'], attrs['points']
-		fewest, most = measure.POINT_COUNTS[ kind ]
+		fewest, most = measurement_math.POINT_COUNTS[ kind ]
 		if not fewest <= len( points ) <= most:
 			count = str( fewest ) if fewest == most else f'{fewest} to {most}'
 			raise serializers.ValidationError( { 'points': f'A {kind} measurement takes {count} points.' } )
-		attrs['geometry'], attrs['results'] = measure.build( kind, [ p.coords for p in points ] )
+		attrs['geometry'], attrs['results'] = measurement_math.build_measurement( kind, [ p.coords for p in points ] )
 		del attrs['points']
 		return attrs

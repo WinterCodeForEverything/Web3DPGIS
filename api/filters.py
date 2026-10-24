@@ -4,10 +4,10 @@ from django.contrib.gis.measure import D
 from django_filters import rest_framework as filters
 from rest_framework.exceptions import ValidationError
 
-from modelshow.models import Model3D
+from catalog.models import Model3D
 
 
-def _floats( value, count, name ):
+def _parse_numbers( value, count, name ):
 	try:
 		numbers = [ float( v ) for v in value.split( ',' ) ]
 	except ValueError:
@@ -23,13 +23,14 @@ class Model3DFilter( filters.FilterSet ):
 	status = filters.ChoiceFilter( choices = Model3D.Status.choices )
 	bbox = filters.CharFilter( method = 'filter_bbox', help_text = 'min_lon,min_lat,max_lon,max_lat' )
 	near = filters.CharFilter( method = 'filter_near', help_text = 'lon,lat; results are sorted by distance and limited by radius' )
-	radius = filters.NumberFilter( method = 'filter_noop', help_text = 'Search radius in metres for `near` (default 10000)' )
+	radius = filters.NumberFilter( method = 'filter_radius', help_text = 'Search radius in metres for `near` (default 10000)' )
 
 	class Meta:
 		model = Model3D
 		fields = [ 'mine', 'search', 'status', 'bbox', 'near', 'radius' ]
 
-	def filter_noop( self, queryset, name, value ):
+	def filter_radius( self, queryset, name, value ):
+		# the radius is applied by filter_near; on its own it filters nothing
 		return queryset
 
 	def filter_mine( self, queryset, name, value ):
@@ -39,11 +40,11 @@ class Model3DFilter( filters.FilterSet ):
 		return queryset
 
 	def filter_bbox( self, queryset, name, value ):
-		min_lon, min_lat, max_lon, max_lat = _floats( value, 4, 'bbox' )
+		min_lon, min_lat, max_lon, max_lat = _parse_numbers( value, 4, 'bbox' )
 		return queryset.filter( location__intersects = Polygon.from_bbox( ( min_lon, min_lat, max_lon, max_lat ) ) )
 
 	def filter_near( self, queryset, name, value ):
-		lon, lat = _floats( value, 2, 'near' )
+		lon, lat = _parse_numbers( value, 2, 'near' )
 		radius = float( self.data.get( 'radius' ) or 10000 )
 		centre = Point( lon, lat, srid = 4326 )
 		return ( queryset.filter( location__distance_lte = ( centre, D( m = radius ) ) )

@@ -60,7 +60,7 @@ if [ -z "${E2E_SKIP_BUILD:-}" ] || [ ! -f frontend/dist/index.html ]; then
 fi
 
 echo "== starting worker and server on :$PORT"
-"$PY" -m celery -A cloudplat worker -l warning >"$LOGS/worker.log" 2>&1 &
+"$PY" -m celery -A config worker -l warning >"$LOGS/worker.log" 2>&1 &
 PIDS+=( $! )
 "$PY" manage.py runserver "127.0.0.1:$PORT" --noreload >"$LOGS/server.log" 2>&1 &
 PIDS+=( $! )

@@ -2,8 +2,8 @@
 import { inject, onMounted, onUnmounted, ref } from 'vue'
 import { ApiError, api } from '@/api/client'
 import type { LabelIcon } from '@/api/types'
-import { labelHostKey } from './host'
-import { labelStoreKey } from './store'
+import { labelHostKey } from './labelHost'
+import { labelStoreKey } from './labelStore'
 
 // Place labels on the model (owner only). Works in any viewer that provides a LabelHost; labels are saved immediately.
 const host = inject( labelHostKey )!

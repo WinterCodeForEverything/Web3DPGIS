@@ -22,19 +22,19 @@ CONTENT_TYPES = {
 }
 
 
-def is_local( storage = None ):
+def is_local_storage( storage = None ):
 	# default_storage is a lazy proxy; isinstance sees through it to the configured class
 	return isinstance( storage or default_storage, FileSystemStorage )
 
 
-def content_type( name ):
+def content_type_for( name ):
 	ext = os.path.splitext( name )[1].lower()
 	return CONTENT_TYPES.get( ext ) or mimetypes.guess_type( name )[0] or 'application/octet-stream'
 
 
 def local_copy( field_file, directory ):
 	"""A local path holding field_file's contents: the file itself on local disk, else a download into directory."""
-	if is_local( field_file.storage ):
+	if is_local_storage( field_file.storage ):
 		return field_file.path
 	os.makedirs( directory, exist_ok = True )
 	target = os.path.join( directory, os.path.basename( field_file.name ) )
@@ -49,7 +49,7 @@ def delete_prefix( prefix, storage = None ):
 	prefix = prefix.strip( '/' )
 	if not prefix:
 		raise ValueError( 'Refusing to delete the whole storage' )
-	if is_local( storage ):
+	if is_local_storage( storage ):
 		shutil.rmtree( storage.path( prefix ), ignore_errors = True )
 	else:
 		storage.bucket.objects.filter( Prefix = prefix + '/' ).delete()
@@ -59,7 +59,7 @@ def list_prefix( prefix, storage = None ):
 	"""Names of stored files under prefix/, for tests and maintenance."""
 	storage = storage or default_storage
 	prefix = prefix.strip( '/' )
-	if is_local( storage ):
+	if is_local_storage( storage ):
 		root = storage.path( prefix )
 		return sorted( os.path.relpath( os.path.join( d, f ), storage.path( '' ) ).replace( os.sep, '/' )
 			for d, _, files in os.walk( root ) for f in files )
@@ -72,7 +72,7 @@ def publish_directory( local_dir, prefix, log = None, storage = None ):
 	prefix = prefix.strip( '/' )
 	files = [ os.path.join( d, f ) for d, _, names in os.walk( local_dir ) for f in names ]
 	delete_prefix( prefix, storage )
-	if is_local( storage ):
+	if is_local_storage( storage ):
 		shutil.copytree( local_dir, storage.path( prefix ) )
 	else:
 		bucket = storage.bucket
@@ -80,14 +80,10 @@ def publish_directory( local_dir, prefix, log = None, storage = None ):
 
 		def upload( path ):
 			key = prefix + '/' + os.path.relpath( path, local_dir ).replace( os.sep, '/' )
-			bucket.upload_file( path, key, ExtraArgs = { **extra, 'ContentType': content_type( path ) } )
+			bucket.upload_file( path, key, ExtraArgs = { **extra, 'ContentType': content_type_for( path ) } )
 
 		with ThreadPoolExecutor( max_workers = 8 ) as pool:
 			list( pool.map( upload, files ) )
 	if log:
-		log( f'Published {len( files )} files to {"media" if is_local( storage ) else "bucket " + storage.bucket_name}/{prefix}/' )
+		log( f'Published {len( files )} files to {"media" if is_local_storage( storage ) else "bucket " + storage.bucket_name}/{prefix}/' )
 	return len( files )
-
-
-def url( name, storage = None ):
-	return ( storage or default_storage ).url( name )

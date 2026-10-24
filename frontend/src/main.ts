@@ -1,4 +1,4 @@
-import './cesium-base'
+import './cesiumBaseUrl'
 import './style.css'
 
 import { createPinia } from 'pinia'

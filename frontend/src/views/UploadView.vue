@@ -20,7 +20,7 @@ let poll: number | undefined
 const isPointCloud = computed( () => /\.(las|laz)$/i.test( file.value?.name ?? '' ) )
 const needsPlacement = computed( () => !!file.value && !/\.(zip|tar|tgz|tar\.gz|rar|las|laz)$/i.test( file.value.name ) )
 
-function pick( e: Event, which: 'file' | 'thumbnail' ) {
+function chooseFile( e: Event, which: 'file' | 'thumbnail' ) {
 	const chosen = ( e.target as HTMLInputElement ).files?.[0] ?? null
 	if ( which === 'thumbnail' ) {
 		thumbnail.value = chosen
@@ -70,14 +70,14 @@ onUnmounted( () => window.clearTimeout( poll ) )
 		<h1>Upload a model</h1>
 		<form class="card" @submit.prevent="submit">
 			<label class="field">File
-				<input type="file" :accept="ACCEPT" required @change="pick( $event, 'file' )" />
+				<input type="file" :accept="ACCEPT" required @change="chooseFile( $event, 'file' )" />
 				<span class="muted">3D Tiles in a zip/tar/rar archive, a mesh (glTF, GLB, OBJ, FBX, DAE, 3DS, PLY, STL) or a point cloud (LAS, LAZ).</span>
 			</label>
 			<label class="field">Name
 				<input v-model="form.name" maxlength="128" required />
 			</label>
 			<label class="field">Thumbnail (optional)
-				<input type="file" accept="image/*" @change="pick( $event, 'thumbnail' )" />
+				<input type="file" accept="image/*" @change="chooseFile( $event, 'thumbnail' )" />
 			</label>
 			<fieldset class="field placement">
 				<legend>Placement on the globe {{ needsPlacement ? '(recommended for meshes)' : '(only used if the file has no position)' }}</legend>

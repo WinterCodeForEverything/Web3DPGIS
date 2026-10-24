@@ -18,9 +18,9 @@ from django.db import OperationalError
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
-from modelshow.models import Model3D
+from catalog.models import Model3D
 
-from . import pipeline, storage, testdata
+from . import pipeline, storage, test_fixtures
 from .converters import ConversionError, _run
 from .errors import TransientError, is_transient
 from .geodesy import ecef_to_geodetic
@@ -64,7 +64,7 @@ class PipelineTestBase( TestCase ):
 		job = model.jobs.get()
 		self.assertEqual( ( model.status, job.status, job.progress ), ( 'ready', 'succeeded', 100 ), job.message + '\n' + job.log )
 		self.assertTrue( default_storage.exists( model.tileset_path ), model.tileset_path )
-		tileset = default_storage.path( model.tileset_path ) if storage.is_local() else model.tileset_path
+		tileset = default_storage.path( model.tileset_path ) if storage.is_local_storage() else model.tileset_path
 		got_lon, got_lat, _ = model.location.coords
 		dx = ( got_lon - lon ) * 111320 * math.cos( math.radians( lat ) )
 		dy = ( got_lat - lat ) * 110540
@@ -75,44 +75,44 @@ class PipelineTestBase( TestCase ):
 
 class PipelineTests( PipelineTestBase ):
 	def test_georeferenced_3d_tiles_keep_their_position( self ):
-		model = self.upload( 'beijing.zip', testdata.tiles_zip( lon = 116.4, lat = 39.9 ), placement = GUANGZHOU )
+		model = self.upload( 'beijing.zip', test_fixtures.tiles_zip( lon = 116.4, lat = 39.9 ), placement = GUANGZHOU )
 		self.assert_ready_near( model, 116.4, 39.9 )
 		self.assertTrue( model.tileset_path.startswith( f'tiles/{model.pk}/' ) )
 
 	def test_local_3d_tiles_are_placed( self ):
-		model = self.upload( 'local.zip', testdata.tiles_zip(), placement = GUANGZHOU )
+		model = self.upload( 'local.zip', test_fixtures.tiles_zip(), placement = GUANGZHOU )
 		tileset = self.assert_ready_near( model, 113.26, 23.13 )
 		self.assertTrue( tileset.endswith( 'tileset.root.json' ) )
 
 	def test_glb( self ):
-		model = self.upload( 'tri.glb', testdata.glb_triangle(), placement = GUANGZHOU )
+		model = self.upload( 'tri.glb', test_fixtures.glb_triangle(), placement = GUANGZHOU )
 		tileset = self.assert_ready_near( model, 113.26, 23.13 )
 		with open( tileset ) as f:
 			self.assertEqual( json.load( f )['root']['content']['uri'], 'model.glb' )
 
 	def test_obj_with_obj2gltf( self ):
-		self.assert_ready_near( self.upload( 'cube.obj', testdata.obj_cube(), placement = GUANGZHOU ), 113.26, 23.13 )
+		self.assert_ready_near( self.upload( 'cube.obj', test_fixtures.obj_cube(), placement = GUANGZHOU ), 113.26, 23.13 )
 
 	def test_ply_with_assimp( self ):
-		self.assert_ready_near( self.upload( 'cube.ply', testdata.ply_cube(), placement = GUANGZHOU ), 113.26, 23.13 )
+		self.assert_ready_near( self.upload( 'cube.ply', test_fixtures.ply_cube(), placement = GUANGZHOU ), 113.26, 23.13 )
 
 	def test_zipped_obj( self ):
-		data = testdata.zip_of( { 'export/readme.txt': b'hi', 'export/cube.obj': testdata.obj_cube() } )
+		data = test_fixtures.zip_of( { 'export/readme.txt': b'hi', 'export/cube.obj': test_fixtures.obj_cube() } )
 		self.assert_ready_near( self.upload( 'export.zip', data, placement = GUANGZHOU ), 113.26, 23.13 )
 
 	def test_default_location_when_no_placement( self ):
 		with self.settings( DEFAULT_MODEL_LOCATION = ( -75.16, 39.95, 0.0 ) ):
-			self.assert_ready_near( self.upload( 'tri.glb', testdata.glb_triangle() ), -75.16, 39.95 )
+			self.assert_ready_near( self.upload( 'tri.glb', test_fixtures.glb_triangle() ), -75.16, 39.95 )
 
 	def test_las_point_cloud_with_py3dtiles( self ):
-		data = testdata.las_points( 113.26, 23.13, 32649 )   # WGS 84 / UTM zone 49N
+		data = test_fixtures.las_points( 113.26, 23.13, 32649 )   # WGS 84 / UTM zone 49N
 		model = self.upload( 'scan.las', data, source_srs = 'EPSG:32649' )
 		self.assert_ready_near( model, 113.26, 23.13, tolerance_m = 30 )
 
 	def test_upload_is_public_and_visible_unless_told_otherwise( self ):
-		model = self.upload( 'tri.glb', testdata.glb_triangle() )
+		model = self.upload( 'tri.glb', test_fixtures.glb_triangle() )
 		self.assertEqual( ( model.is_public, model.is_visible ), ( True, True ) )
-		model = self.upload( 'tri.glb', testdata.glb_triangle(), is_public = 'false' )
+		model = self.upload( 'tri.glb', test_fixtures.glb_triangle(), is_public = 'false' )
 		self.assertEqual( ( model.is_public, model.is_visible ), ( False, True ) )
 
 	def test_unsupported_extension_is_rejected( self ):
@@ -121,20 +121,20 @@ class PipelineTests( PipelineTestBase ):
 		self.assertIn( 'source_file', r.data )
 
 	def test_archive_without_models_fails_with_message( self ):
-		model = self.upload( 'empty.zip', testdata.zip_of( { 'readme.txt': b'nothing here' } ) )
+		model = self.upload( 'empty.zip', test_fixtures.zip_of( { 'readme.txt': b'nothing here' } ) )
 		job = model.jobs.get()
 		self.assertEqual( ( model.status, job.status ), ( 'failed', 'failed' ) )
 		self.assertIn( 'No 3D Tiles, model or point-cloud file', job.message )
 		self.assertEqual( job.attempts, 1 )   # bad input is never retried
 
 	def test_zip_slip_is_blocked( self ):
-		model = self.upload( 'evil.zip', testdata.zip_of( { '../../escaped.txt': b'x', 'cube.obj': testdata.obj_cube() } ) )
+		model = self.upload( 'evil.zip', test_fixtures.zip_of( { '../../escaped.txt': b'x', 'cube.obj': test_fixtures.obj_cube() } ) )
 		self.assertEqual( model.status, 'failed' )
 		self.assertIn( 'Unsafe path', model.jobs.get().message )
 		self.assertFalse( os.path.exists( os.path.join( os.path.dirname( self._media ), 'escaped.txt' ) ) )
 
 	def test_job_is_visible_to_owner_only( self ):
-		model = self.upload( 'tri.glb', testdata.glb_triangle() )
+		model = self.upload( 'tri.glb', test_fixtures.glb_triangle() )
 		job_id = model.jobs.get().pk
 		r = self.client.get( f'/api/v1/jobs/{job_id}/' )
 		self.assertEqual( r.data['status'], 'succeeded' )
@@ -144,14 +144,14 @@ class PipelineTests( PipelineTestBase ):
 		self.assertEqual( bob.get( f'/api/v1/jobs/{job_id}/' ).status_code, 404 )
 
 	def test_reprocess( self ):
-		model = self.upload( 'tri.glb', testdata.glb_triangle() )
+		model = self.upload( 'tri.glb', test_fixtures.glb_triangle() )
 		with self.captureOnCommitCallbacks( execute = True ):
 			r = self.client.post( f'/api/v1/models/{model.pk}/reprocess/' )
 		self.assertEqual( r.status_code, 202 )
 		self.assertEqual( model.jobs.count(), 2 )
 
 	def test_delete_removes_files( self ):
-		model = self.upload( 'tri.glb', testdata.glb_triangle() )
+		model = self.upload( 'tri.glb', test_fixtures.glb_triangle() )
 		source = model.source_file.path
 		tiles = os.path.join( self._media, 'tiles', str( model.pk ) )
 		self.assertTrue( os.path.exists( source ) and os.path.isdir( tiles ) )
@@ -206,7 +206,7 @@ class LimitsAndRetryTests( PipelineTestBase ):
 
 	@override_settings( PIPELINE_MAX_ARCHIVE_FILES = 5 )
 	def test_too_many_files( self ):
-		data = testdata.zip_of( { f'part{i}.txt': b'x' for i in range( 10 ) } )
+		data = test_fixtures.zip_of( { f'part{i}.txt': b'x' for i in range( 10 ) } )
 		self.assertIn( 'holds 10 files; the limit is 5', self.failed_job( self.upload( 'many.zip', data ) ).message )
 
 	def test_zip_bomb_ratio( self ):
@@ -230,7 +230,7 @@ class LimitsAndRetryTests( PipelineTestBase ):
 		self.assertEqual( job.attempts, 1 )
 
 	def test_ordinary_archives_still_work( self ):
-		self.assert_ready_near( self.upload( 'site.zip', testdata.tiles_zip( lon = 116.4, lat = 39.9 ) ), 116.4, 39.9 )
+		self.assert_ready_near( self.upload( 'site.zip', test_fixtures.tiles_zip( lon = 116.4, lat = 39.9 ) ), 116.4, 39.9 )
 
 	def test_temporary_failure_is_retried_then_succeeds( self ):
 		real_run_job = pipeline.run_job
@@ -243,7 +243,7 @@ class LimitsAndRetryTests( PipelineTestBase ):
 			return real_run_job( job )
 
 		with mock.patch( 'processing.tasks.run_job', side_effect = flaky ):
-			model = self.upload( 'tri.glb', testdata.glb_triangle() )
+			model = self.upload( 'tri.glb', test_fixtures.glb_triangle() )
 		job = model.jobs.get()
 		self.assertEqual( ( model.status, job.status, job.attempts ), ( 'ready', 'succeeded', 2 ) )
 		self.assertEqual( calls, [ 1, 2 ] )
@@ -251,13 +251,13 @@ class LimitsAndRetryTests( PipelineTestBase ):
 
 	def test_out_of_disk_space_retries_then_gives_up( self ):
 		with mock.patch( 'processing.archives.shutil.disk_usage', return_value = DiskUsage( 10 ** 9, 10 ** 9, 1000 ) ):
-			job = self.failed_job( self.upload( 'site.zip', testdata.tiles_zip() ) )
+			job = self.failed_job( self.upload( 'site.zip', test_fixtures.tiles_zip() ) )
 		self.assertEqual( job.attempts, 4 )   # 1 try + PIPELINE_MAX_RETRIES
 		self.assertIn( 'Not enough disk space', job.message )
 		self.assertIn( 'gave up after 4 attempts', job.message )
 
 	def test_retry_message_while_waiting( self ):
-		job = self.upload( 'tri.glb', testdata.glb_triangle() ).jobs.get()
+		job = self.upload( 'tri.glb', test_fixtures.glb_triangle() ).jobs.get()
 		job.attempts = 1
 		pipeline.mark_retrying( job, TransientError( 'database went away' ), 60, 4 )
 		r = self.client.get( f'/api/v1/jobs/{job.pk}/' )
@@ -311,7 +311,7 @@ class S3StorageTests( PipelineTestBase ):
 		return default_storage.connection.meta.client.head_object( Bucket = 'test-3dpgis', Key = key )
 
 	def test_upload_lives_in_the_bucket_and_tiles_are_published_there( self ):
-		model = self.upload( 'tri.glb', testdata.glb_triangle(), placement = GUANGZHOU )
+		model = self.upload( 'tri.glb', test_fixtures.glb_triangle(), placement = GUANGZHOU )
 		self.assert_ready_near( model, 113.26, 23.13 )
 		self.assertTrue( model.source_file.name.startswith( 'package/' ) )
 		self.assertIn( model.source_file.name, self.keys( 'package/' ) )
@@ -324,13 +324,13 @@ class S3StorageTests( PipelineTestBase ):
 		self.assertEqual( [ f for _, _, files in os.walk( self._media ) for f in files ], [] )
 
 	def test_archive_is_downloaded_from_the_bucket( self ):
-		model = self.upload( 'site.zip', testdata.tiles_zip( lon = 116.4, lat = 39.9 ) )
+		model = self.upload( 'site.zip', test_fixtures.tiles_zip( lon = 116.4, lat = 39.9 ) )
 		self.assert_ready_near( model, 116.4, 39.9 )
 		self.assertIn( f'tiles/{model.pk}/tri.glb', self.keys( 'tiles/' ) )
 		self.assertIn( 'Downloading site', model.jobs.get().log )
 
 	def test_reprocess_replaces_old_tiles( self ):
-		model = self.upload( 'tri.glb', testdata.glb_triangle() )
+		model = self.upload( 'tri.glb', test_fixtures.glb_triangle() )
 		default_storage.bucket.put_object( Key = f'tiles/{model.pk}/stale.b3dm', Body = b'old' )
 		with self.captureOnCommitCallbacks( execute = True ):
 			self.client.post( f'/api/v1/models/{model.pk}/reprocess/' )
@@ -338,8 +338,8 @@ class S3StorageTests( PipelineTestBase ):
 		self.assertIn( f'tiles/{model.pk}/tileset.json', self.keys( 'tiles/' ) )
 
 	def test_delete_removes_upload_and_tiles_from_the_bucket( self ):
-		model = self.upload( 'tri.glb', testdata.glb_triangle() )
-		other = self.upload( 'tri.glb', testdata.glb_triangle() )
+		model = self.upload( 'tri.glb', test_fixtures.glb_triangle() )
+		other = self.upload( 'tri.glb', test_fixtures.glb_triangle() )
 		with self.captureOnCommitCallbacks( execute = True ):
 			self.assertEqual( self.client.delete( f'/api/v1/models/{model.pk}/' ).status_code, 204 )
 		self.assertEqual( self.keys( f'tiles/{model.pk}/' ), [] )
@@ -350,7 +350,7 @@ class S3StorageTests( PipelineTestBase ):
 		self.assertEqual( len( self.keys( f'tiles/{other.pk}/' ) ), 2 )
 
 	def test_missing_upload_fails_clearly( self ):
-		model = self.upload( 'tri.glb', testdata.glb_triangle() )
+		model = self.upload( 'tri.glb', test_fixtures.glb_triangle() )
 		default_storage.delete( model.source_file.name )
 		with self.captureOnCommitCallbacks( execute = True ):
 			self.client.post( f'/api/v1/models/{model.pk}/reprocess/' )

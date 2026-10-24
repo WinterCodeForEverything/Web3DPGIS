@@ -7,10 +7,10 @@ from django.contrib.gis.geos import Point
 from django.test import override_settings
 from rest_framework.test import APIClient, APITestCase
 
-from addlabel.models import Label, LabelIcon
-from modelshow.models import Model3D
+from labels.models import Label, LabelIcon
+from catalog.models import Model3D
 from processing.geodesy import ecef_to_geodetic, geodetic_to_ecef
-from viewermode.models import FlightPath, Measurement
+from viewer_tools.models import FlightPath, Measurement
 
 GUANGZHOU = ( 113.26, 23.13 )
 BEIJING = ( 116.40, 39.90 )

@@ -16,7 +16,7 @@ class Command( BaseCommand ):
 		parser.add_argument( '--dry-run', action = 'store_true', help = 'Only list what would be copied' )
 
 	def handle( self, *args, **options ):
-		if storage.is_local():
+		if storage.is_local_storage():
 			raise CommandError( 'Set STORAGE_BACKEND=s3 (and the S3_* settings) first.' )
 		root = str( settings.MEDIA_ROOT )
 		bucket = default_storage.bucket
@@ -32,7 +32,7 @@ class Command( BaseCommand ):
 					skipped += 1
 					continue
 				if not options['dry_run']:
-					bucket.upload_file( path, key, ExtraArgs = { **default_storage.object_parameters, 'ContentType': storage.content_type( path ) } )
+					bucket.upload_file( path, key, ExtraArgs = { **default_storage.object_parameters, 'ContentType': storage.content_type_for( path ) } )
 				copied += 1
 				if options['verbosity'] > 1:
 					self.stdout.write( key )

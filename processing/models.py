@@ -1,5 +1,5 @@
 from django.db import models
-from modelshow.models import Model3D
+from catalog.models import Model3D
 
 
 class Job( models.Model ):

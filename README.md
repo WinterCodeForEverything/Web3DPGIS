@@ -17,15 +17,28 @@ Browser ── Vue 3 app (frontend/) ──► /api/v1/ (Django REST Framework) 
 
 | Path | What it holds |
 |---|---|
+| `config/` | Django settings, URLs, Celery app |
 | `api/` | REST API: serializers, viewsets, permissions, spatial filters; OpenAPI docs at `/api/docs/` |
-| `modelshow/` | `Model3D` (owner, status, PostGIS `location`, tileset path) and file clean-up on delete |
-| `addlabel/` | `LabelIcon`, `Label` (PostGIS point + JSON properties) |
-| `viewermode/` | `FlightPath`, `FlightPoint` (camera poses) |
+| `catalog/` | `Model3D` (owner, status, PostGIS `location`, tileset path) and file clean-up on delete |
+| `labels/` | `LabelIcon`, `Label` (PostGIS point + JSON properties) |
+| `viewer_tools/` | `FlightPath`, `FlightPoint` (camera poses), `Measurement` (PostGIS geometry) and the measurement maths |
 | `processing/` | `Job` model, Celery task and the upload → 3D Tiles pipeline |
-| `user_login/` | `UserProfile` |
-| `frontend/` | Vue 3 app; viewer tools in `src/viewer/tools/`, measurement maths in `src/viewer/geometry.ts` |
+| `accounts/` | `UserProfile` |
 | `converters/` | Node command-line converters used by the pipeline |
-| `cloudplat/` | Django settings, URLs, Celery app |
+| `frontend/` | Vue 3 app, laid out below |
+
+The Django apps keep their original labels (`modelshow`, `addlabel`, `viewermode`, `user_login`, see each `apps.py`),
+so database tables and migration history did not change when the folders were renamed.
+
+| `frontend/src/` | What it holds |
+|---|---|
+| `views/` | Pages: model list, upload, login, and `ViewerSwitchPage` which opens a model in `ThreeViewerView` (default) or `MapViewerView` |
+| `three/` | The three.js 3D model viewer (`ModelViewer.ts`) and its label and measuring drawing |
+| `cesium/` | The Cesium map viewer (`mapViewer.ts`), its GIS tools in `tools/`, tool sessions, line of sight, label and measuring drawing |
+| `labels/` | Labels shared by both viewers: store, editor, popup, and the `LabelHost` each viewer provides |
+| `measurements/` | Measuring shared by both viewers: panel, shapes, and the `MeasureHost` each viewer provides |
+| `geo/` | Measurement maths on Earth-centred points (no Cesium), used by both viewers |
+| `api/` | Typed client for the REST API |
 
 ## What uploads are accepted
 
@@ -99,7 +112,7 @@ Run three processes:
 
 ```sh
 .venv/bin/python manage.py runserver                 # API on :8000
-.venv/bin/celery -A cloudplat worker -l info          # processing jobs
+.venv/bin/celery -A config worker -l info          # processing jobs
 cd frontend && npm run dev                            # app on http://localhost:5173 (proxies /api and /media to :8000)
 ```
 
@@ -127,7 +140,7 @@ services; the end-to-end job keeps its screenshots and logs as a build artifact.
 
 - `cd frontend && npm ci && npm run build`, then `python manage.py collectstatic --noinput`.
 - Run the API with gunicorn behind nginx (`deploy/nginx.conf`) and at least one Celery worker:
-  `celery -A cloudplat worker -l info` (thread pool by default; set `CELERY_WORKER_CONCURRENCY` to taste).
+  `celery -A config worker -l info` (thread pool by default; set `CELERY_WORKER_CONCURRENCY` to taste).
 - With more than one server, use `STORAGE_BACKEND=s3` so all servers and workers share files (see File storage).
 - Set `DJANGO_DEBUG=false`, a real `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS` and, behind HTTPS, `DJANGO_CSRF_TRUSTED_ORIGINS`.
 - Upgrading a 2019 database: `python manage.py migrate` converts usernames to owners and Earth-centred coordinates to

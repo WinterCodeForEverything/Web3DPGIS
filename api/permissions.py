@@ -1,7 +1,7 @@
 from django.db.models import Q
 from rest_framework import permissions
 
-from modelshow.models import Model3D
+from catalog.models import Model3D
 
 
 def readable_models( user ):

@@ -10,10 +10,10 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from addlabel.models import Label, LabelIcon
+from labels.models import Label, LabelIcon
 from processing.models import Job
 from processing.pipeline import start_processing
-from viewermode.models import FlightPath, Measurement
+from viewer_tools.models import FlightPath, Measurement
 
 from .filters import Model3DFilter
 from .permissions import IsCreatorOrStaff, IsOwnerOrReadOnly, can_edit, readable_models

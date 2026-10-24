@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { inject, ref, watch } from 'vue'
 import { ApiError } from '@/api/client'
-import { labelHostKey } from './host'
-import { labelStoreKey } from './store'
+import { labelHostKey } from './labelHost'
+import { labelStoreKey } from './labelStore'
 
 // Shows the clicked label's properties; the model's owner can edit or delete it. The same popup is used by every viewer.
 const host = inject( labelHostKey )!
