@@ -82,6 +82,20 @@ export function poseOrientation( pose: CameraPose ) {
 	return { direction: new Cesium.Cartesian3( ...pose.direction ), up: new Cesium.Cartesian3( ...pose.up ) }
 }
 
+/**
+ * Keep rendering for a moment. Cesium draws the letters of new label text a few frames after the label is added, and in
+ * requestRenderMode nothing renders then, so text that needs new glyphs (a new font or new characters) shows as an empty box.
+ */
+export function renderBriefly( viewer: Cesium.Viewer, ms = 500 ) {
+	const until = performance.now() + ms
+	const tick = () => {
+		if ( viewer.isDestroyed() ) return
+		viewer.scene.requestRender()
+		if ( performance.now() < until ) requestAnimationFrame( tick )
+	}
+	tick()
+}
+
 // Shared drawing helpers so every tool looks the same
 export const style = {
 	point: { pixelSize: 9, color: Cesium.Color.YELLOW, outlineColor: Cesium.Color.BLACK, outlineWidth: 1, disableDepthTestDistance: Number.POSITIVE_INFINITY },
@@ -93,4 +107,9 @@ export const style = {
 		pixelOffset: new Cesium.Cartesian2( 0, -12 ), disableDepthTestDistance: Number.POSITIVE_INFINITY,
 		showBackground: true, backgroundColor: Cesium.Color.BLACK.withAlpha( 0.6 ),
 	},
+	// a result that sums up a measurement (e.g. a path's total length), set apart from the per-part labels
+	totalLabel: {} as Cesium.LabelGraphics.ConstructorOptions,
+}
+style.totalLabel = {
+	...style.label, font: 'bold 15px sans-serif', backgroundColor: Cesium.Color.fromCssColorString( '#d9480f' ).withAlpha( 0.9 ),
 }

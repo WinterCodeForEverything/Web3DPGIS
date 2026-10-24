@@ -1,5 +1,5 @@
 // Thin fetch wrapper for the Django API: session cookies, CSRF header, JSON errors.
-import type { CameraPose, FlightPath, GeoPoint, Job, Label, LabelIcon, Model3D, Page, User } from './types'
+import type { CameraPose, FlightPath, GeoPoint, Job, Label, LabelIcon, Measurement, MeasurementKind, Model3D, Page, User } from './types'
 
 export class ApiError extends Error {
 	constructor( public status: number, public data: unknown ) {
@@ -97,4 +97,9 @@ export const api = {
 	flightPaths: ( model: number ) => request<Page<FlightPath>>( 'GET', '/flight-paths/' + query( { model } ) ),
 	createFlightPath: ( model: number, name: string, points: CameraPose[] ) => request<FlightPath>( 'POST', '/flight-paths/', { model, name, points } ),
 	deleteFlightPath: ( id: number ) => request<void>( 'DELETE', `/flight-paths/${id}/` ),
+
+	measurements: ( model: number ) => request<Page<Measurement>>( 'GET', '/measurements/' + query( { model } ) ),
+	createMeasurement: ( measurement: { model: number; kind: MeasurementKind; points: GeoPoint[]; name?: string } ) =>
+		request<Measurement>( 'POST', '/measurements/', measurement ),
+	deleteMeasurement: ( id: number ) => request<void>( 'DELETE', `/measurements/${id}/` ),
 }

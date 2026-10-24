@@ -16,7 +16,11 @@ export default defineConfig( ( { command } ) => {
 			vue(),
 			// Cesium loads its workers, assets and widget CSS at runtime from CESIUM_BASE_URL
 			viteStaticCopy( {
-				targets: [ 'Workers', 'ThirdParty', 'Assets', 'Widgets' ].map( dir => ( { src: `${cesiumSource}/${dir}`, dest: 'cesium', rename: { stripBase: 4 } } ) ),
+				targets: [
+					...[ 'Workers', 'ThirdParty', 'Assets', 'Widgets' ].map( dir => ( { src: `${cesiumSource}/${dir}`, dest: 'cesium', rename: { stripBase: 4 } } ) ),
+					// Draco decoder for compressed glTF tiles in the three.js viewer
+					{ src: 'node_modules/three/examples/jsm/libs/draco/gltf/*', dest: 'draco', rename: { stripBase: 7 } },
+				],
 			} ),
 		],
 		define: {

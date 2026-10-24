@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { circle, enuBasis, formatArea, formatLength, geodeticToEcef, polygonArea, polylineLength, surfaceArea, triangle, type Vec3 } from './geometry'
+import { boundsCentre, circle, circleRing, distance, ecefToGeodetic, enuBasis, formatArea, formatLength, geodeticToEcef, polygonArea, polylineLength, segmentLengths, surfaceArea, triangle, type Vec3 } from './geometry'
 
 // Points offset from a base location by metres east / north / up, for exact expectations.
 function offset( base: Vec3, e: number, n: number, u: number ): Vec3 {
@@ -24,6 +24,13 @@ describe( 'geodeticToEcef', () => {
 describe( 'measurements', () => {
 	it( 'polyline length sums segments', () => {
 		expect( polylineLength( [ gz, offset( gz, 30, 0, 0 ), offset( gz, 30, 40, 0 ) ] ) ).toBeCloseTo( 70, 6 )
+	} )
+
+	it( 'segment lengths of a polyline, one per pair of points', () => {
+		const lengths = segmentLengths( [ gz, offset( gz, 30, 0, 0 ), offset( gz, 30, 40, 0 ), offset( gz, 30, 40, 12 ) ] )
+		expect( lengths ).toHaveLength( 3 )
+		lengths.forEach( ( l, i ) => expect( l ).toBeCloseTo( [ 30, 40, 12 ][i], 6 ) )
+		expect( segmentLengths( [ gz ] ) ).toEqual( [] )
 	} )
 
 	it( 'polygon area of a 100 m x 50 m rectangle', () => {
@@ -74,5 +81,19 @@ describe( 'formatting', () => {
 		expect( formatLength( 1234.6 ) ).toBe( '1.235 km' )
 		expect( formatArea( 5000 ) ).toBe( '5000.00 m²' )
 		expect( formatArea( 2.5e6 ) ).toBe( '2.5000 km²' )
+	} )
+
+	it( 'converts ECEF back to longitude, latitude and height', () => {
+		const g = ecefToGeodetic( geodeticToEcef( 113.26, 23.13, 42.5 ) )
+		expect( g.longitude ).toBeCloseTo( 113.26, 9 )
+		expect( g.latitude ).toBeCloseTo( 23.13, 9 )
+		expect( g.height ).toBeCloseTo( 42.5, 4 )
+	} )
+
+	it( 'circle ring and bounds centre', () => {
+		const ring = circleRing( gz, 25, 16 )
+		expect( ring ).toHaveLength( 16 )
+		ring.forEach( p => expect( distance( p, gz ) ).toBeCloseTo( 25, 6 ) )
+		boundsCentre( ring ).forEach( ( c, i ) => expect( c ).toBeCloseTo( gz[i], 6 ) )
 	} )
 } )

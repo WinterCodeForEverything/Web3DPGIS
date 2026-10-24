@@ -1,18 +1,13 @@
 <script setup lang="ts">
-import * as Cesium from 'cesium'
 import { inject, onMounted, onUnmounted, ref } from 'vue'
 import { ApiError, api } from '@/api/client'
 import type { LabelIcon } from '@/api/types'
-import { pickPoint, style, toGeoPoint, viewerKey } from '../core'
-import { labelLayerKey } from '../labels'
-import { createSession } from '../session'
+import { labelHostKey } from './host'
+import { labelStoreKey } from './store'
 
-// Place labels on the model (owner only). Labels are saved immediately and drawn by the label layer.
-const ctx = inject( viewerKey )!
-const layer = inject( labelLayerKey )!
-const viewer = ctx.viewer
-const session = createSession( viewer, 'label-editor' )
-onUnmounted( () => session.destroy() )
+// Place labels on the model (owner only). Works in any viewer that provides a LabelHost; labels are saved immediately.
+const host = inject( labelHostKey )!
+const store = inject( labelStoreKey )!
 
 const icons = ref<LabelIcon[]>( [] )
 const iconId = ref<number | null>( null )
@@ -40,29 +35,23 @@ async function uploadIcon( e: Event ) {
 	}
 }
 
-const handler = session.handler()
-handler.setInputAction( async ( e: { position: Cesium.Cartesian2 } ) => {
+const stopListening = host.onModelClick( async position => {
 	if ( !placing.value ) return
-	const p = pickPoint( viewer, e.position )
-	if ( !p ) return
-	const marker = session.entities.add( { position: p, point: style.point } )
-	viewer.scene.requestRender()
+	const removeMarker = host.showMarker( position )
 	try {
-		await api.createLabel( { model: ctx.model.value.id, name: name.value.trim() || 'Label', icon: iconId.value, position: toGeoPoint( p ) } )
-		await layer.reload()
-		ctx.notify( 'Label saved' )
+		await store.create( { name: name.value, icon: iconId.value, position } )
+		host.notify( 'Label saved' )
 	} catch ( err ) {
-		ctx.notify( err instanceof ApiError ? err.message : String( err ), 'error' )
+		host.notify( err instanceof ApiError ? err.message : String( err ), 'error' )
 	} finally {
-		session.entities.remove( marker )
-		viewer.scene.requestRender()
+		removeMarker()
 	}
-}, Cesium.ScreenSpaceEventType.LEFT_CLICK )
+} )
+onUnmounted( stopListening )
 
 async function removeAll() {
-	if ( !confirm( `Delete all ${layer.labels.value.length} labels on this model?` ) ) return
-	await Promise.all( layer.labels.value.map( l => api.deleteLabel( l.id ) ) )
-	await layer.reload()
+	if ( !confirm( `Delete all ${store.labels.value.length} labels on this model?` ) ) return
+	await store.removeAll()
 }
 </script>
 
@@ -82,8 +71,8 @@ async function removeAll() {
 	</div>
 	<button :class="placing ? 'primary' : ''" @click="placing = !placing">{{ placing ? 'Click the model to place… (stop)' : 'Place labels' }}</button>
 	<p v-if="error" class="error">{{ error }}</p>
-	<p class="muted small">{{ layer.labels.value.length }} labels on this model. Click a label to see or edit its properties.</p>
-	<button v-if="layer.labels.value.length" class="small danger" @click="removeAll">Delete all labels</button>
+	<p class="muted small">{{ store.labels.value.length }} labels on this model. Click a label to see or edit its properties.</p>
+	<button v-if="store.labels.value.length" class="small danger" @click="removeAll">Delete all labels</button>
 </template>
 
 <style scoped>

@@ -81,6 +81,19 @@ export interface FlightPath {
 	points: CameraPose[]
 }
 
+export type MeasurementKind = 'point' | 'distance' | 'area' | 'height' | 'circle'
+
+/** A saved measurement: its clicked points in order, and the values the server worked out from them (metres, m²). */
+export interface Measurement {
+	id: number
+	model: number
+	kind: MeasurementKind
+	name: string
+	points: GeoPoint[]
+	results: Record<string, number | number[]>
+	created_at: string
+}
+
 export interface Page<T> {
 	count: number
 	next: string | null

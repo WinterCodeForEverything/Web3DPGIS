@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import type * as Cesium from 'cesium'
+import 'cesium/Build/Cesium/Widgets/widgets.css'
 import { computed, markRaw, onBeforeUnmount, onMounted, provide, ref, shallowRef, type Component } from 'vue'
 import { ApiError, api } from '@/api/client'
 import type { Model3D } from '@/api/types'
-import LabelPopup from '@/components/LabelPopup.vue'
-import { createLabelLayer, labelLayerKey, type LabelLayer } from '@/viewer/labels'
+import LabelEditor from '@/labels/LabelEditor.vue'
+import LabelPopup from '@/labels/LabelPopup.vue'
+import { labelHostKey } from '@/labels/host'
+import { createLabelStore, labelStoreKey } from '@/labels/store'
+import { cesiumLabelHost, drawLabels } from '@/viewer/labels'
 import { createViewer, loadTileset, viewerKey, type ViewerContext } from '@/viewer/core'
 import FlightTool from '@/viewer/tools/FlightTool.vue'
 import HeightTool from '@/viewer/tools/HeightTool.vue'
-import LabelTool from '@/viewer/tools/LabelTool.vue'
 import MeasureTool from '@/viewer/tools/MeasureTool.vue'
 import SightlineTool from '@/viewer/tools/SightlineTool.vue'
 import ViewshedTool from '@/viewer/tools/ViewshedTool.vue'
@@ -19,7 +22,7 @@ const props = defineProps<{ id: number }>()
 interface ToolEntry { id: string; title: string; component: Component; editOnly?: boolean }
 const TOOLS: ToolEntry[] = [
 	{ id: 'measure', title: 'Measure', component: markRaw( MeasureTool ) },
-	{ id: 'labels', title: 'Labels', component: markRaw( LabelTool ), editOnly: true },
+	{ id: 'labels', title: 'Labels', component: markRaw( LabelEditor ), editOnly: true },
 	{ id: 'flight', title: 'Flight', component: markRaw( FlightTool ) },
 	{ id: 'walk', title: 'Walk', component: markRaw( WalkTool ) },
 	{ id: 'sightline', title: 'Sight line', component: markRaw( SightlineTool ) },
@@ -31,7 +34,8 @@ const container = ref<HTMLDivElement>()
 const model = shallowRef<Model3D | null>( null )
 const tileset = shallowRef<Cesium.Cesium3DTileset | null>( null )
 const context = shallowRef<ViewerContext | null>( null )
-const labelLayer = shallowRef<LabelLayer | null>( null )
+const labels = createLabelStore( props.id )
+let removeLabels: ( () => void ) | undefined
 const activeTool = ref<string | null>( null )
 const error = ref( '' )
 const toast = ref<{ message: string; kind: string } | null>( null )
@@ -54,12 +58,8 @@ const contextProxy = {
 	notify,
 } as ViewerContext
 provide( viewerKey, contextProxy )
-provide( labelLayerKey, {
-	get labels() { return labelLayer.value!.labels },
-	get selected() { return labelLayer.value!.selected },
-	reload: () => labelLayer.value!.reload(),
-	destroy: () => labelLayer.value?.destroy(),
-} as LabelLayer )
+provide( labelStoreKey, labels )
+provide( labelHostKey, cesiumLabelHost( contextProxy ) )
 
 onMounted( async () => {
 	try {
@@ -70,8 +70,8 @@ onMounted( async () => {
 		}
 		const viewer = createViewer( container.value! )
 		context.value = { viewer, tileset, model: model as ViewerContext['model'], notify }
-		labelLayer.value = createLabelLayer( viewer, model.value.id )
-		void labelLayer.value.reload()
+		removeLabels = drawLabels( viewer, labels )
+		void labels.reload()
 		tileset.value = await loadTileset( viewer, model.value.tileset_url, model.value.height_offset )
 	} catch ( e ) {
 		error.value = e instanceof ApiError && e.status === 404 ? 'Model not found, or you do not have access to it.' : `Could not load the model: ${e instanceof Error ? e.message : e}`
@@ -80,7 +80,7 @@ onMounted( async () => {
 
 onBeforeUnmount( () => {
 	activeTool.value = null
-	labelLayer.value?.destroy()
+	removeLabels?.()
 	context.value?.viewer.destroy()
 	window.clearTimeout( toastTimer )
 } )
@@ -110,7 +110,7 @@ function toggle( id: string ) {
 			<component :is="active.component" :key="active.id" />
 		</section>
 
-		<LabelPopup v-if="labelLayer" />
+		<LabelPopup v-if="context" />
 
 		<div v-if="model" class="title">
 			<strong>{{ model.name }}</strong>

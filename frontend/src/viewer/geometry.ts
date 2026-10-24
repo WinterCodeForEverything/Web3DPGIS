@@ -16,6 +16,34 @@ export function geodeticToEcef( lonDeg: number, latDeg: number, h = 0 ): Vec3 {
 	return [ ( n + h ) * Math.cos( lat ) * Math.cos( lon ), ( n + h ) * Math.cos( lat ) * Math.sin( lon ), ( n * ( 1 - E2 ) + h ) * Math.sin( lat ) ]
 }
 
+/** Longitude, latitude (degrees) and ellipsoidal height (metres) of an ECEF point. */
+export function ecefToGeodetic( [ x, y, z ]: Vec3 ): { longitude: number; latitude: number; height: number } {
+	const b = A * Math.sqrt( 1 - E2 ), ep2 = ( A * A - b * b ) / ( b * b )
+	const lon = Math.atan2( y, x ), p = Math.hypot( x, y )
+	if ( p < 1e-9 ) return { longitude: lon * 180 / Math.PI, latitude: Math.sign( z ) * 90, height: Math.abs( z ) - b }
+	// Bowring's initial guess, then a few fixed-point iterations (converges to < 1 mm)
+	const theta = Math.atan2( z * A, p * b )
+	let lat = Math.atan2( z + ep2 * b * Math.sin( theta ) ** 3, p - E2 * A * Math.cos( theta ) ** 3 )
+	let n = 0, h = 0
+	for ( let i = 0; i < 5; i++ ) {
+		n = A / Math.sqrt( 1 - E2 * Math.sin( lat ) ** 2 )
+		h = p / Math.cos( lat ) - n
+		lat = Math.atan2( z, p * ( 1 - E2 * n / ( n + h ) ) )
+	}
+	n = A / Math.sqrt( 1 - E2 * Math.sin( lat ) ** 2 )
+	return { longitude: lon * 180 / Math.PI, latitude: lat * 180 / Math.PI, height: p / Math.cos( lat ) - n }
+}
+
+export const midpoint = ( a: Vec3, b: Vec3 ): Vec3 => [ ( a[0] + b[0] ) / 2, ( a[1] + b[1] ) / 2, ( a[2] + b[2] ) / 2 ]
+
+/** Centre of the box around some points. */
+export function boundsCentre( points: Vec3[] ): Vec3 {
+	return [ 0, 1, 2 ].map( i => {
+		const values = points.map( p => p[i] )
+		return ( Math.min( ...values ) + Math.max( ...values ) ) / 2
+	} ) as Vec3
+}
+
 /** Geodetic surface normal ("up") at an ECEF point. */
 export function upAt( p: Vec3 ): Vec3 {
 	// normal of the WGS84 ellipsoid: (x/a², y/a², z/b²), normalised
@@ -35,11 +63,14 @@ export function enuBasis( p: Vec3 ): { east: Vec3; north: Vec3; up: Vec3 } {
 	return { east, north, up }
 }
 
+/** Length in metres of each segment of a polyline, in order. */
+export function segmentLengths( points: Vec3[] ): number[] {
+	return points.slice( 1 ).map( ( p, i ) => distance( points[i], p ) )
+}
+
 /** Total length of a polyline in metres. */
 export function polylineLength( points: Vec3[] ): number {
-	let total = 0
-	for ( let i = 1; i < points.length; i++ ) total += distance( points[i - 1], points[i] )
-	return total
+	return segmentLengths( points ).reduce( ( total, l ) => total + l, 0 )
 }
 
 /** Area in m² of a polygon, measured flat in the local horizontal plane at its centroid. */
@@ -77,6 +108,15 @@ export function triangle( a: Vec3, b: Vec3 ): { horizontal: number; vertical: nu
 	const vertical = dot( d, up )
 	const slant = length( d )
 	return { horizontal: Math.sqrt( Math.max( slant * slant - vertical * vertical, 0 ) ), vertical, slant }
+}
+
+/** Points around a horizontal circle, e.g. to draw it as a polygon. */
+export function circleRing( centre: Vec3, radius: number, segments = 64 ): Vec3[] {
+	const { east, north } = enuBasis( centre )
+	return Array.from( { length: segments }, ( _, i ) => {
+		const t = 2 * Math.PI * i / segments, e = Math.cos( t ) * radius, n = Math.sin( t ) * radius
+		return [ 0, 1, 2 ].map( k => centre[k] + e * east[k] + n * north[k] ) as Vec3
+	} )
 }
 
 /** Area of a horizontal circle with the given centre and a point on its edge. */

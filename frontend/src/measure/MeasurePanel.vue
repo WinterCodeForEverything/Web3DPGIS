@@ -1,0 +1,140 @@
+<script setup lang="ts">
+import { inject, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
+import { ApiError, api } from '@/api/client'
+import { useAuth } from '@/stores/auth'
+import { ecefToGeodetic, geodeticToEcef, type Vec3 } from '@/viewer/geometry'
+import { measureHostKey } from './host'
+import { MODES, describe, modeInfo, modeOfKind, previewShapes, segmentShapes, type Mode } from './shapes'
+
+// Measuring, shared by every viewer that provides a MeasureHost: clicking, drawing, and saving to the signed-in user's account.
+const host = inject( measureHostKey )!
+const auth = useAuth()
+
+/** A finished measurement: its line in the results list and a function that removes its drawing. id is set once it is saved. */
+interface Entry { key: number; id: number | null; text: string; erase: () => void }
+const entries = shallowRef<Entry[]>( [] )
+let nextKey = 1
+
+const mode = ref<Mode>( 'distance' )
+let points: Vec3[] = []
+// what is drawn while a measurement is being clicked, replaced by the finished drawing
+let draft: ( () => void )[] = []
+let erasePreview = () => {}
+let destroyed = false
+
+function show( mode: Mode, pts: Vec3[] ): Entry {
+	const { text, shapes } = describe( mode, pts )
+	return { key: nextKey++, id: null, text, erase: host.draw( shapes ) }
+}
+
+function resetDraft() {
+	erasePreview()
+	erasePreview = () => {}
+	draft.forEach( erase => erase() )
+	draft = []
+	points = []
+}
+
+/** A measurement is complete: draw it for good, list it and save it for the signed-in user. */
+async function complete() {
+	const m = mode.value, pts = points
+	resetDraft()
+	const entry = show( m, pts )
+	entries.value = [ entry, ...entries.value ]
+	if ( !auth.user ) return
+	try {
+		const saved = await api.createMeasurement( { model: host.model.value!.id, kind: modeInfo( m ).kind, points: pts.map( ecefToGeodetic ) } )
+		entry.id = saved.id
+		entries.value = [ ...entries.value ]
+	} catch ( e ) {
+		host.notify( `Measurement not saved: ${e instanceof ApiError ? e.message : e}`, 'error' )
+	}
+}
+
+const stopListening = host.listen( {
+	click( p ) {
+		points.push( p )
+		draft.push( host.draw( [ { type: 'mark', at: p } ] ) )
+		if ( points.length === modeInfo( mode.value ).clicks ) {
+			void complete()
+			return
+		}
+		// each clicked segment of a path is drawn straight away, with its length at its middle
+		if ( mode.value === 'distance' && points.length >= 2 ) draft.push( host.draw( segmentShapes( points[points.length - 2], p ) ) )
+	},
+	move( p ) {
+		if ( !points.length || !p ) return
+		erasePreview()
+		erasePreview = host.draw( previewShapes( mode.value, points, p ) )
+	},
+	finish() {
+		if ( points.length >= modeInfo( mode.value ).minimum ) void complete()
+		else resetDraft()
+	},
+} )
+
+watch( mode, resetDraft )
+
+// your saved measurements on this model come back when the panel opens
+onMounted( async () => {
+	if ( !auth.user ) return
+	try {
+		const saved = ( await api.measurements( host.model.value!.id ) ).results
+		if ( destroyed ) return
+		const loaded = saved.map( s => ( {
+			...show( modeOfKind( s.kind ), s.points.map( p => geodeticToEcef( p.longitude, p.latitude, p.height ) ) ), id: s.id,
+		} ) )
+		entries.value = [ ...entries.value, ...loaded ]
+	} catch ( e ) {
+		host.notify( `Could not load your measurements: ${e instanceof ApiError ? e.message : e}`, 'error' )
+	}
+} )
+
+onUnmounted( () => {
+	destroyed = true
+	stopListening()
+	resetDraft()
+	entries.value.forEach( e => e.erase() )
+} )
+
+async function remove( entry: Entry ) {
+	try {
+		if ( entry.id !== null ) await api.deleteMeasurement( entry.id )
+	} catch ( e ) {
+		host.notify( e instanceof ApiError ? e.message : String( e ), 'error' )
+		return
+	}
+	entry.erase()
+	entries.value = entries.value.filter( x => x !== entry )
+}
+
+async function clearAll() {
+	const saved = entries.value.filter( e => e.id !== null ).length
+	if ( saved && !confirm( `Delete all ${saved} saved measurements on this model?` ) ) return
+	await Promise.all( entries.value.map( remove ) )
+	resetDraft()
+}
+</script>
+
+<template>
+	<div class="modes" role="radiogroup" aria-label="Measurement">
+		<button v-for="m in MODES" :key="m.id" class="small" :class="{ primary: mode === m.id }" role="radio" :aria-checked="mode === m.id" @click="mode = m.id">{{ m.title }}</button>
+	</div>
+	<p class="muted">{{ modeInfo( mode ).hint }}</p>
+	<ol v-if="entries.length" class="results">
+		<li v-for="e in entries" :key="e.key">
+			<span>{{ e.text }}</span>
+			<button class="link" :aria-label="e.id === null ? 'Remove measurement' : 'Delete saved measurement'" title="Delete" @click="remove( e )">✕</button>
+		</li>
+	</ol>
+	<p class="muted small">{{ auth.user ? 'Measurements are saved to your account for this model.' : 'Log in to save your measurements.' }}</p>
+	<button class="small" :disabled="!entries.length" @click="clearAll">{{ entries.some( e => e.id !== null ) ? 'Delete all' : 'Clear' }}</button>
+</template>
+
+<style scoped>
+.modes { display: flex; flex-wrap: wrap; gap: 6px; }
+.results { margin: 0; padding-left: 20px; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+.results li span { margin-right: 6px; }
+p { margin: 0; font-size: 14px; }
+.small { font-size: 13px; }
+</style>
