@@ -217,7 +217,8 @@ def main():
 
 	# 4. 3D Tiles with levels of detail, placed at the east-north-up origin
 	lon, lat, alt = report.get( 'enu_origin' ) or ( 0.0, 0.0, 0.0 )
-	stage( 'tiling', [ obj2tiles, '--lods', preset['lods'], '--divisions', 2, '--lat', lat, '--lon', lon, '--alt', alt,
+	# OpenMVS writes a Z-up OBJ (east, north, up); Obj2Tiles assumes Y-up unless told, and the model would stand on its edge
+	stage( 'tiling', [ obj2tiles, '--y-up-to-z-up', '--lods', preset['lods'], '--divisions', 2, '--lat', lat, '--lon', lon, '--alt', alt,
 		dense / 'model.obj', tiles ] )
 
 	report[ 'total_seconds' ] = round( sum( s['seconds'] for s in report['stages'].values() ), 1 )
