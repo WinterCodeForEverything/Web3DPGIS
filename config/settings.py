@@ -241,6 +241,10 @@ CELERY_TASK_ALWAYS_EAGER = env_bool('CELERY_TASK_ALWAYS_EAGER', False)
 CELERY_TASK_EAGER_PROPAGATES = True
 CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+# With acks_late, Redis hands an unacknowledged task to another worker after this many seconds. A copy that arrives
+# while the job is still running is dropped (processing.tasks checks the job's heartbeat), so this only sets how long
+# a job whose worker died waits before another worker picks it up.
+CELERY_BROKER_TRANSPORT_OPTIONS = { 'visibility_timeout': int( env( 'CELERY_VISIBILITY_TIMEOUT', str( 2 * 3600 ) ) ) }
 # Converters run as subprocesses, so threads are enough; the prefork pool also fails under macOS "spawn".
 CELERY_WORKER_POOL = env( 'CELERY_WORKER_POOL', 'threads' )
 CELERY_WORKER_CONCURRENCY = int( env( 'CELERY_WORKER_CONCURRENCY', '2' ) )

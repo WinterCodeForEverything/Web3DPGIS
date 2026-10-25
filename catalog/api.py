@@ -2,7 +2,7 @@
 import os
 
 from django.conf import settings
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from core.api_fields import GeoPointField
 from core.permissions import IsOwnerOrReadOnly, can_edit
 from processing.api import JobSerializer
-from processing.jobs import start_job
+from processing.jobs import JobConflict, start_job
 from processing.tiling import supported_extensions
 
 from .access import readable_models
@@ -93,12 +93,15 @@ class Model3DViewSet( viewsets.ModelViewSet ):
 		model = serializer.save( owner = self.request.user )
 		start_job( model, 'tiling' )
 
-	@extend_schema( request = None, responses = { 202: JobSerializer } )
+	@extend_schema( request = None, responses = { 202: JobSerializer, 409: OpenApiResponse( description = 'The model already has a job in progress' ) } )
 	@action( detail = True, methods = [ 'post' ] )
 	def reprocess( self, request, pk = None ):
 		"""Run the processing pipeline again on the stored upload."""
 		model = self.get_object()
-		job = start_job( model, 'tiling' )
+		try:
+			job = start_job( model, 'tiling' )
+		except JobConflict:
+			return Response( { 'detail': 'This model already has a job in progress.' }, status = status.HTTP_409_CONFLICT )
 		return Response( JobSerializer( job ).data, status = status.HTTP_202_ACCEPTED )
 
 

@@ -7,8 +7,10 @@ import io
 import shutil
 import tarfile
 import tempfile
+import time
 import zipfile
 from collections import namedtuple
+from datetime import timedelta
 from unittest import mock
 
 from django.contrib.auth.models import User
@@ -16,7 +18,8 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import OperationalError
-from django.test import TestCase, override_settings
+from django.test import TestCase, TransactionTestCase, override_settings
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from catalog.models import Model3D
@@ -27,6 +30,7 @@ from core.geodesy import ecef_to_geodetic
 from . import converters, jobs, tasks, test_fixtures, tiling
 from .converters import ConversionError, _run
 from .errors import TransientError, is_transient
+from .models import Job
 from .tilesets import tileset_location
 
 GUANGZHOU = { 'longitude': 113.26, 'latitude': 23.13, 'height': 15.0 }
@@ -276,7 +280,7 @@ class ExtensionPointTests( PipelineTestBase ):
 		def reconstruct( job, report ):
 			report.step( 'reconstructing', 50 )
 			job.model.source_file.save( 'reconstructed.glb', ContentFile( test_fixtures.glb_triangle() ), save = True )
-			jobs.start_job( job.model, 'tiling' )
+			jobs.start_job( job.model, 'tiling', follow_up_of = job )
 
 		with mock.patch.dict( jobs._kinds ), mock.patch.object( tasks.process_job, 'apply_async', wraps = tasks.process_job.apply_async ) as queued:
 			jobs.register_job_kind( 'reconstruction', reconstruct, queue = 'gpu' )
@@ -307,6 +311,64 @@ class ExtensionPointTests( PipelineTestBase ):
 			model = self.upload( 'shape.tri', test_fixtures.glb_triangle(), placement = GUANGZHOU )
 		self.assert_ready_near( model, 113.26, 23.13 )
 		self.assertNotIn( '.tri', tiling.supported_extensions() )
+
+
+class JobGuardTests( PipelineTestBase ):
+	"""A job runs once: one queued or running job per model, and repeated deliveries of a task are dropped."""
+
+	def make_model( self ):
+		return Model3D.objects.create( name = 'site', owner = self.user, source_file = 'package/x.zip' )
+
+	def test_one_job_per_model( self ):
+		model = self.make_model()
+		first = jobs.start_job( model, 'tiling' )
+		with self.assertRaises( jobs.JobConflict ):
+			jobs.start_job( model, 'tiling' )
+		follow_up = jobs.start_job( model, 'tiling', follow_up_of = first )   # a job's own next step is allowed
+		Job.objects.filter( pk__in = [ first.pk, follow_up.pk ] ).update( status = Job.Status.SUCCEEDED )
+		self.assertEqual( jobs.start_job( model, 'tiling' ).status, Job.Status.QUEUED )
+
+	def test_reprocess_refuses_while_a_job_is_in_progress( self ):
+		model = self.make_model()
+		Job.objects.create( model = model, status = Job.Status.RUNNING )
+		r = self.client.post( f'/api/v1/models/{model.pk}/reprocess/' )
+		self.assertEqual( r.status_code, 409, r.data )
+		self.assertEqual( model.jobs.count(), 1 )
+
+	def deliver( self, job ):
+		with mock.patch( 'processing.tasks.run_job' ) as run:
+			tasks.process_job.apply( args = ( job.pk, ) )
+		return run
+
+	def test_repeated_delivery_of_a_finished_job_is_ignored( self ):
+		job = Job.objects.create( model = self.make_model(), status = Job.Status.SUCCEEDED, attempts = 1 )
+		self.assertFalse( self.deliver( job ).called )
+		job.refresh_from_db()
+		self.assertEqual( ( job.status, job.attempts ), ( 'succeeded', 1 ) )
+
+	def test_a_job_still_running_elsewhere_is_not_started_twice( self ):
+		job = Job.objects.create( model = self.make_model(), status = Job.Status.RUNNING, attempts = 1, heartbeat_at = timezone.now() )
+		self.assertFalse( self.deliver( job ).called )
+		self.assertEqual( Job.objects.get( pk = job.pk ).attempts, 1 )
+
+	def test_a_job_whose_worker_died_is_picked_up_again( self ):
+		stale = timezone.now() - jobs.STALE_AFTER - timedelta( seconds = 1 )
+		job = Job.objects.create( model = self.make_model(), status = Job.Status.RUNNING, attempts = 1, heartbeat_at = stale )
+		self.assertTrue( self.deliver( job ).called )
+		job.refresh_from_db()
+		self.assertEqual( ( job.status, job.attempts ), ( 'succeeded', 2 ) )
+
+
+class HeartbeatTests( TransactionTestCase ):
+	"""The heartbeat thread uses its own database connection, so its writes need committed rows."""
+
+	def test_heartbeat_is_written_while_the_job_runs( self ):
+		user = User.objects.create_user( 'carol', 'carol@example.com', 'Sm0ke-pass-3' )
+		model = Model3D.objects.create( name = 'site', owner = user, source_file = 'package/x.zip' )
+		job = Job.objects.create( model = model, status = Job.Status.RUNNING )
+		with mock.patch.object( jobs, 'HEARTBEAT_INTERVAL', timedelta( milliseconds = 20 ) ), jobs.Heartbeat( job ):
+			time.sleep( 0.3 )
+		self.assertIsNotNone( Job.objects.get( pk = job.pk ).heartbeat_at )
 
 
 class ErrorClassificationTests( TestCase ):

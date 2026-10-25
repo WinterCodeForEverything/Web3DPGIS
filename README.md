@@ -60,7 +60,7 @@ api             → core              (finds each app's api.py; no app imports a
 | To add … | Do this |
 |---|---|
 | API endpoints | Give the app an `api.py` with `routes = [ ( prefix, viewset, basename ) ]` and/or `urlpatterns`; `api/urls.py` picks it up from `INSTALLED_APPS` |
-| A kind of background job | `processing.jobs.register_job_kind( name, run, queue = … )` in the app's `AppConfig.ready()`; start it with `start_job( model, name )`. `run( job, report )` raises on failure; temporary errors (`processing.errors.TransientError`) are retried. A job can start a follow-up job, e.g. `tiling` |
+| A kind of background job | `processing.jobs.register_job_kind( name, run, queue = … )` in the app's `AppConfig.ready()`; start it with `start_job( model, name )` (one queued or running job per model; a job's own next step passes `follow_up_of = job`). `run( job, report )` raises on failure; temporary errors (`processing.errors.TransientError`) are retried. A job can start a follow-up job, e.g. `tiling` |
 | An upload format for tiling | `processing.tiling.register_input_handler( InputHandler( … ), before = 'mesh' )`; its extensions are then accepted by the upload API |
 | A viewer tool | A panel component plus one entry in `frontend/src/cesium/tools/index.ts` or `frontend/src/three/tools/index.ts` |
 | A feature in both viewers | Shared logic in its own folder talking to a small host interface, plus a host per viewer (see `labels/` and `measurements/`) |
@@ -71,7 +71,7 @@ api             → core              (finds each app's api.py; no app imports a
 1. A Django app `reconstruction/` in `INSTALLED_APPS`, with a rule in `core/test_architecture.py` (e.g. `{ 'core', 'catalog', 'processing' }`).
 2. Its own models, e.g. a photo set and settings linked one-to-one to the `Model3D` it produces.
 3. `api.py` with its endpoints, e.g. create a reconstruction and upload photos. Creating one makes a `Model3D` and calls `start_job( model, 'reconstruction' )`.
-4. In `AppConfig.ready()`: `register_job_kind( 'reconstruction', run, queue = 'reconstruction' )`. `run` builds a mesh or point cloud, saves it as `model.source_file`, and calls `start_job( model, 'tiling' )`. From then on the model is tiled, listed, viewed, labelled and measured like any upload.
+4. In `AppConfig.ready()`: `register_job_kind( 'reconstruction', run, queue = 'reconstruction' )`. `run` builds a mesh or point cloud, saves it as `model.source_file`, and calls `start_job( model, 'tiling', follow_up_of = job )`. From then on the model is tiled, listed, viewed, labelled and measured like any upload.
 5. Workers for the heavy part: `celery -A config worker -Q reconstruction` on machines with the reconstruction software (and GPU); the usual workers keep serving the default `celery` queue.
 6. Front end: `frontend/src/reconstruction/` with its API file and pages, routes in `router.ts`, and a nav link in `App.vue`.
 
@@ -180,3 +180,9 @@ services; the end-to-end job keeps its screenshots and logs as a build artifact.
 - Set `DJANGO_DEBUG=false`, a real `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS` and, behind HTTPS, `DJANGO_CSRF_TRUSTED_ORIGINS`.
 - Upgrading a 2019 database: `python manage.py migrate` converts usernames to owners and Earth-centred coordinates to
   PostGIS points; the migrations are reversible.
+
+## License
+
+3DPGIS is free software under the [GNU Affero General Public License v3.0 or later](LICENSE): you may use, change and
+share it, and a modified version offered to users over a network must make its source available to them.
+Third-party software it uses keeps its own licence; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
