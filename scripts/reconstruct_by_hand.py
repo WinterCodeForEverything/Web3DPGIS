@@ -33,6 +33,9 @@ PRESETS = {
 	'high': { 'max_image_size': 3200, 'densify_level': 0, 'mesh_decimate': 1.0, 'refine': True, 'lods': 4 },
 }
 PHOTO_TYPES = ( '.jpg', '.jpeg', '.tif', '.tiff', '.png' )
+# OpenMVS 2.4.0's macOS arm64 build breaks texture seam levelling (global: black patches, local: coloured borders),
+# so it is turned off there; patches then keep their own photo's colours
+SEAM_LEVELING = platform.system() != 'Darwin'
 
 
 # --- EXIF GPS → local east-north-up metres ---------------------------------------
@@ -122,7 +125,7 @@ def main():
 	log, report_path = work / 'commands.log', work / 'benchmark.json'
 	work.mkdir( parents = True, exist_ok = True )
 	report = json.loads( report_path.read_text() ) if report_path.exists() else { 'stages': {} }
-	report.update( preset = args.preset, settings = preset, host = f'{platform.machine()} {platform.system()} {os.cpu_count()} cores' )
+	report.update( preset = args.preset, settings = { **preset, 'seam_leveling': SEAM_LEVELING }, host = f'{platform.machine()} {platform.system()} {os.cpu_count()} cores' )
 
 	def stage( name, *cmds ):
 		"""Run a stage's commands unless its .done marker exists; record time, memory and disk use."""
@@ -209,7 +212,8 @@ def main():
 	stage( 'mesh', *mesh_cmds )
 	mesh = dense / ( 'scene_dense_mesh_refine.ply' if preset['refine'] else 'scene_dense_mesh.ply' )
 	stage( 'texture', [ mvs( 'TextureMesh' ), '-i', dense / 'scene_dense.mvs', '-m', mesh, '-w', dense,
-		'-o', dense / 'model.mvs', '--export-type', 'obj' ] )
+		'-o', dense / 'model.mvs', '--export-type', 'obj',
+		'--global-seam-leveling', int( SEAM_LEVELING ), '--local-seam-leveling', int( SEAM_LEVELING ) ] )
 
 	# 4. 3D Tiles with levels of detail, placed at the east-north-up origin
 	lon, lat, alt = report.get( 'enu_origin' ) or ( 0.0, 0.0, 0.0 )
