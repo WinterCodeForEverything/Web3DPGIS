@@ -92,7 +92,7 @@ def _options( recon, model, masks, poses ):
 		'max_image_size': settings.RECONSTRUCTION_MAX_IMAGE_SIZE, 'use_gpu': settings.RECONSTRUCTION_USE_GPU,
 		'seam_leveling': settings.RECONSTRUCTION_SEAM_LEVELING, 'poses': poses,
 		'masks': masks if recon.photos.exclude( mask = '' ).exists() else None,
-		'placement': tuple( model.location.coords ) if model.location else None } )
+		'placement': tuple( model.origin.coords ) if model.origin else None } )
 
 
 def _cancel_check( recon ):
@@ -177,9 +177,10 @@ def run_reconstruction( job, report ):
 
 	report.step( 'publishing the mesh', 99 )
 	_publish_result( recon, model, work )
-	placement = result.get( 'placement' ) or ( tuple( model.location.coords ) if model.location else settings.DEFAULT_MODEL_LOCATION )
-	model.location = Point( *( list( placement ) + [ 0.0 ] )[:3], srid = 4326 )
-	model.save( update_fields = [ 'source_file', 'location', 'updated_at' ] )
+	# the mesh's (0, 0, 0): the GPS origin, or the placement the user gave; tiling anchors it there on every run
+	placement = result.get( 'placement' ) or ( tuple( model.origin.coords ) if model.origin else settings.DEFAULT_MODEL_LOCATION )
+	model.origin = model.location = Point( *( list( placement ) + [ 0.0 ] )[:3], srid = 4326 )
+	model.save( update_fields = [ 'source_file', 'origin', 'location', 'updated_at' ] )
 	start_job( model, 'tiling', follow_up_of = job )
 	clear_checkpoints( recon )
 	if remote:

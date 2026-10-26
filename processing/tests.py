@@ -109,6 +109,18 @@ class PipelineTests( PipelineTestBase ):
 		data = test_fixtures.zip_of( { 'export/readme.txt': b'hi', 'export/cube.obj': test_fixtures.obj_cube() } )
 		self.assert_ready_near( self.upload( 'export.zip', data, placement = GUANGZHOU ), 113.26, 23.13 )
 
+	def test_reprocessing_does_not_move_a_mesh( self ):
+		# the cube's centre is 2 m from its origin, so placing by the centre would shift it on every run
+		model = self.upload( 'cube.obj', test_fixtures.obj_cube(), placement = GUANGZHOU )
+		first = Model3D.objects.get( pk = model.pk ).location.coords
+		with self.captureOnCommitCallbacks( execute = True ):
+			self.assertEqual( self.client.post( f'/api/v1/models/{model.pk}/reprocess/' ).status_code, 202 )
+		model.refresh_from_db()
+		self.assertEqual( model.status, 'ready' )
+		for a, b in zip( model.location.coords, first ):
+			self.assertAlmostEqual( a, b, places = 7 )
+		self.assertEqual( model.origin.coords, ( 113.26, 23.13, 15.0 ) )
+
 	def test_default_location_when_no_placement( self ):
 		with self.settings( DEFAULT_MODEL_LOCATION = ( -75.16, 39.95, 0.0 ) ):
 			self.assert_ready_near( self.upload( 'tri.glb', test_fixtures.glb_triangle() ), -75.16, 39.95 )

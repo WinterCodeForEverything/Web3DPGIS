@@ -89,7 +89,7 @@ class OptionsSerializer( serializers.Serializer ):
 class ReconstructionSerializer( serializers.ModelSerializer ):
 	name = serializers.CharField( source = 'model.name', max_length = 128 )
 	is_public = serializers.BooleanField( source = 'model.is_public', default = True )
-	placement = GeoPointField( source = 'model.location', required = False, allow_null = True,
+	placement = GeoPointField( source = 'model.origin', required = False, allow_null = True,
 		help_text = 'Where to put a result that has no GPS; with GPS the photos place it' )
 	options = OptionsSerializer( required = False )
 	status = serializers.CharField( source = 'model.status', read_only = True )
@@ -119,7 +119,7 @@ class ReconstructionSerializer( serializers.ModelSerializer ):
 	def create( self, validated_data ):
 		model_data = validated_data.pop( 'model' )
 		model = Model3D.objects.create( owner = self.context['request'].user, name = model_data['name'],
-			is_public = model_data.get( 'is_public', True ), location = model_data.get( 'location' ) )
+			is_public = model_data.get( 'is_public', True ), origin = model_data.get( 'origin' ), location = model_data.get( 'origin' ) )
 		return Reconstruction.objects.create( model = model, preset = validated_data.get( 'preset', 'standard' ),
 			options = validated_data.get( 'options' ) or OptionsSerializer().run_validation( {} ) )
 
@@ -134,11 +134,13 @@ class ReconstructionSerializer( serializers.ModelSerializer ):
 			validated_data['options'] = options.validated_data
 		for field, value in model_data.items():
 			setattr( instance.model, field, value )
+		if 'origin' in model_data and instance.model.status != instance.model.Status.READY:
+			instance.model.location = model_data['origin']   # shown on the map until the result has its own centre
 		instance.model.save()
 		for field, value in validated_data.items():
 			setattr( instance, field, value )
 		instance.save()
-		if validated_data or 'location' in model_data:
+		if validated_data or 'origin' in model_data:
 			_changed( instance )
 		return instance
 

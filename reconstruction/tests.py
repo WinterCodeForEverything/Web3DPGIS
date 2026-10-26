@@ -200,6 +200,7 @@ class ReconstructionJobTests( APITestBase ):
 			self.assertEqual( sorted( z.namelist() ), [ 'model.mtl', 'model.obj', 'tiling.json' ] )
 			self.assertEqual( json.loads( z.read( 'tiling.json' ) ), { 'lods': 3 } )
 		self.assertEqual( self.model.location.coords, ( -83.8, 41.3, 250.0 ) )
+		self.assertEqual( self.model.origin.coords, ( -83.8, 41.3, 250.0 ) )   # tiling anchors the mesh here
 		self.assertEqual( ( self.recon.mode, self.recon.stats['registered_photos'], self.recon.stats['stages'] ), ( 'gps', 3, { 'prepare': 1.0 } ) )
 		options = self.seen['options']
 		self.assertEqual( ( options.preset, options.gps_std, options.min_track, options.masks ), ( 'preview', ( 2, 4 ), 3, None ) )

@@ -73,7 +73,7 @@ class Model3DCreateSerializer( Model3DSerializer ):
 				validated_data[flag] = True
 		model = Model3D( **validated_data )
 		if placement is not None:
-			model.location = placement
+			model.location = model.origin = placement
 		model.save()
 		return model
 

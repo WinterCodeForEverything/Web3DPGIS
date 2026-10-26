@@ -222,7 +222,9 @@ def _prepare_input( model, work, report ):
 def run_tiling( job, report ):
 	"""Build and publish the tileset for job.model; raises on failure (the task records it)."""
 	model = job.model
-	placement = model.location.coords if model.location else settings.DEFAULT_MODEL_LOCATION
+	# the origin stays put across runs; models from before it existed fall back to their location
+	anchor = model.origin or model.location
+	placement = anchor.coords if anchor else settings.DEFAULT_MODEL_LOCATION
 	if len( placement ) == 2:
 		placement = ( *placement, 0.0 )
 
@@ -250,8 +252,9 @@ def run_tiling( job, report ):
 		storage.publish_directory( out_dir, prefix, report.log )
 		model.tileset_path = prefix + '/' + os.path.relpath( tileset, out_dir ).replace( os.sep, '/' )
 		model.location = Point( *( location or placement ), srid = 4326 )
+		model.origin = model.origin or Point( *placement, srid = 4326 )
 		model.status = model.Status.READY
-		model.save( update_fields = [ 'tileset_path', 'location', 'status', 'updated_at' ] )
+		model.save( update_fields = [ 'tileset_path', 'location', 'origin', 'status', 'updated_at' ] )
 		report.log( f'Tileset ready: {model.tileset_path}' )
 	finally:
 		shutil.rmtree( work, ignore_errors = True )
