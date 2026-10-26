@@ -22,6 +22,7 @@ class Job( models.Model ):
 	created_at = models.DateTimeField( auto_now_add = True )
 	started_at = models.DateTimeField( null = True, blank = True )
 	finished_at = models.DateTimeField( null = True, blank = True )
+	heartbeat_at = models.DateTimeField( null = True, blank = True, help_text = 'Last sign of life from the worker running the job' )
 
 	class Meta:
 		ordering = [ '-id' ]

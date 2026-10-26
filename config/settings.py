@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+import platform
+import tempfile
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
@@ -65,6 +67,7 @@ INSTALLED_APPS = [
 	'viewer_tools',
 	'labels',
 	'processing',
+	'reconstruction',
 	'api',
 ]
 
@@ -241,6 +244,10 @@ CELERY_TASK_ALWAYS_EAGER = env_bool('CELERY_TASK_ALWAYS_EAGER', False)
 CELERY_TASK_EAGER_PROPAGATES = True
 CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+# With acks_late, Redis hands an unacknowledged task to another worker after this many seconds. A copy that arrives
+# while the job is still running is dropped (processing.tasks checks the job's heartbeat), so this only sets how long
+# a job whose worker died waits before another worker picks it up.
+CELERY_BROKER_TRANSPORT_OPTIONS = { 'visibility_timeout': int( env( 'CELERY_VISIBILITY_TIMEOUT', str( 2 * 3600 ) ) ) }
 # Converters run as subprocesses, so threads are enough; the prefork pool also fails under macOS "spawn".
 CELERY_WORKER_POOL = env( 'CELERY_WORKER_POOL', 'threads' )
 CELERY_WORKER_CONCURRENCY = int( env( 'CELERY_WORKER_CONCURRENCY', '2' ) )
@@ -250,11 +257,42 @@ PIPELINE_NODE_BIN = env('PIPELINE_NODE_BIN', str(BASE_DIR / 'converters' / 'node
 PIPELINE_ASSIMP = env('PIPELINE_ASSIMP', 'assimp')
 # Local scratch space for jobs (downloads, extraction, conversion); the system temp folder when empty
 PIPELINE_WORK_DIR = env( 'PIPELINE_WORK_DIR' ) or None
+# Level-of-detail tiling for large OBJ meshes (processing/lod_tiling.py); an empty PIPELINE_OBJ2TILES turns it off.
+# The macOS release of Obj2Tiles 1.6.2 is an x86_64 build and runs under Rosetta.
+PIPELINE_OBJ2TILES = env( 'PIPELINE_OBJ2TILES', str( BASE_DIR.parent / 'recon-tools' / 'obj2tiles' / 'Obj2Tiles' ) )
+PIPELINE_LOD_MIN_SIZE = int( env( 'PIPELINE_LOD_MIN_SIZE', str( 16 * 1024 ** 2 ) ) )   # OBJ bytes; smaller meshes stay one tile
+PIPELINE_LOD_LEVELS = int( env( 'PIPELINE_LOD_LEVELS', '3' ) )
+# with --octree each finer level splits once more: 1 gives 4, 16, 64 tiles for three levels. 2 (16, 64, 256) did not
+# finish in 23 min on the 94 MB Bellus mesh, where 1 takes 65 s
+PIPELINE_LOD_DIVISIONS = int( env( 'PIPELINE_LOD_DIVISIONS', '1' ) )
+PIPELINE_LOD_TIMEOUT = int( env( 'PIPELINE_LOD_TIMEOUT', '1800' ) )                     # seconds; then one tile instead
+# caps the whole source texture before it is cut into tiles; the finest level keeps up to this resolution in all
+PIPELINE_LOD_MAX_TEXTURE_SIZE = int( env( 'PIPELINE_LOD_MAX_TEXTURE_SIZE', '8192' ) )
+PIPELINE_LOD_TEXTURE_QUALITY = int( env( 'PIPELINE_LOD_TEXTURE_QUALITY', '75' ) )       # JPEG quality
 
 # Where a model without its own georeference is placed (longitude, latitude, height in metres).
 DEFAULT_MODEL_LOCATION = tuple(float(v) for v in env('DEFAULT_MODEL_LOCATION', '113.26,23.13,0').split(','))
 
 MAX_UPLOAD_SIZE = int(env('MAX_UPLOAD_SIZE', str(2 * 1024 ** 3)))
+
+# 3D reconstruction from photos (reconstruction app): COLMAP from PATH, OpenMVS in RECONSTRUCTION_TOOLS_DIR/openmvs/
+RECONSTRUCTION_QUEUE = env( 'RECONSTRUCTION_QUEUE', 'reconstruction' )   # workers run: celery -A config worker -Q celery,reconstruction
+RECONSTRUCTION_COLMAP = env( 'RECONSTRUCTION_COLMAP', 'colmap' )
+RECONSTRUCTION_TOOLS_DIR = Path( env( 'RECONSTRUCTION_TOOLS_DIR' ) or BASE_DIR.parent / 'recon-tools' )
+RECONSTRUCTION_USE_GPU = env_bool( 'RECONSTRUCTION_USE_GPU', False )        # needs a CUDA build of COLMAP
+# caps every preset's image size, e.g. 2000 on an 8 GB machine; 0 keeps the presets' sizes
+RECONSTRUCTION_MAX_IMAGE_SIZE = int( env( 'RECONSTRUCTION_MAX_IMAGE_SIZE', '0' ) ) or None
+# OpenMVS 2.4.0's macOS build breaks texture seam levelling (black patches, coloured borders), so it is off there
+RECONSTRUCTION_SEAM_LEVELING = env_bool( 'RECONSTRUCTION_SEAM_LEVELING', platform.system() != 'Darwin' )
+# with S3 storage: local work folders, copied to recon/<id>/work/ after each stage (on local storage the job works in media/)
+RECONSTRUCTION_WORK_DIR = Path( env( 'RECONSTRUCTION_WORK_DIR' ) or Path( tempfile.gettempdir() ) / '3dpgis-reconstruction' )
+RECONSTRUCTION_MIN_PHOTOS = int( env( 'RECONSTRUCTION_MIN_PHOTOS', '3' ) )
+RECONSTRUCTION_MAX_PHOTOS = int( env( 'RECONSTRUCTION_MAX_PHOTOS', '1000' ) )
+RECONSTRUCTION_MAX_PHOTO_SIZE = int( env( 'RECONSTRUCTION_MAX_PHOTO_SIZE', str( 50 * 1024 ** 2 ) ) )   # bytes per photo
+RECONSTRUCTION_UPLOAD_URL_EXPIRES = int( env( 'RECONSTRUCTION_UPLOAD_URL_EXPIRES', '3600' ) )         # seconds
+# EGM96 geoid for EXIF altitudes (above sea level → above the ellipsoid); fetched once from cdn.proj.org when allowed
+RECONSTRUCTION_GEOID_GRID = env( 'RECONSTRUCTION_GEOID_GRID', 'us_nga_egm96_15.tif' )
+RECONSTRUCTION_GEOID_DOWNLOAD = env_bool( 'RECONSTRUCTION_GEOID_DOWNLOAD', True )
 
 # Archive limits, checked before anything is extracted (protects against "zip bombs")
 PIPELINE_MAX_EXTRACTED_SIZE = int( env( 'PIPELINE_MAX_EXTRACTED_SIZE', str( 20 * 1024 ** 3 ) ) )   # bytes unpacked

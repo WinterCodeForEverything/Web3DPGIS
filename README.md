@@ -22,6 +22,7 @@ Browser ── Vue 3 app (frontend/) ──► /api/v1/ (Django REST Framework) 
 | `accounts/` | `UserProfile`; sign-up, login and logout API |
 | `catalog/` | `Model3D` (owner, status, PostGIS `location`, tileset path), who may see a model, the models API with spatial search, file clean-up on delete |
 | `processing/` | Background job engine (`Job`, job kinds, Celery task, retries) and the tiling job: upload → 3D Tiles |
+| `reconstruction/` | Photos → 3D model: `Reconstruction`, `Photo`, the reconstructions API, the COLMAP + OpenMVS pipeline (`stages.py`) and its job, which hands the mesh to tiling |
 | `labels/` | `LabelIcon`, `Label` (PostGIS point + JSON properties) and their API |
 | `viewer_tools/` | `FlightPath`, `FlightPoint` (camera poses), `Measurement` (PostGIS geometry), the measurement maths and their API |
 | `api/` | Puts the apps' own `api.py` modules together under `/api/v1/`; OpenAPI docs at `/api/docs/` |
@@ -60,19 +61,19 @@ api             → core              (finds each app's api.py; no app imports a
 | To add … | Do this |
 |---|---|
 | API endpoints | Give the app an `api.py` with `routes = [ ( prefix, viewset, basename ) ]` and/or `urlpatterns`; `api/urls.py` picks it up from `INSTALLED_APPS` |
-| A kind of background job | `processing.jobs.register_job_kind( name, run, queue = … )` in the app's `AppConfig.ready()`; start it with `start_job( model, name )`. `run( job, report )` raises on failure; temporary errors (`processing.errors.TransientError`) are retried. A job can start a follow-up job, e.g. `tiling` |
+| A kind of background job | `processing.jobs.register_job_kind( name, run, queue = … )` in the app's `AppConfig.ready()`; start it with `start_job( model, name )` (one queued or running job per model; a job's own next step passes `follow_up_of = job`). `run( job, report )` raises on failure; temporary errors (`processing.errors.TransientError`) are retried. A job can start a follow-up job, e.g. `tiling` |
 | An upload format for tiling | `processing.tiling.register_input_handler( InputHandler( … ), before = 'mesh' )`; its extensions are then accepted by the upload API |
 | A viewer tool | A panel component plus one entry in `frontend/src/cesium/tools/index.ts` or `frontend/src/three/tools/index.ts` |
 | A feature in both viewers | Shared logic in its own folder talking to a small host interface, plus a host per viewer (see `labels/` and `measurements/`) |
 | A page | A view in `frontend/src/views/` and a route in `router.ts` |
 
-**Adding a module such as 3D reconstruction**, where photos become a model:
+**Adding a module** — this is how `reconstruction/` is built, where photos become a model:
 
-1. A Django app `reconstruction/` in `INSTALLED_APPS`, with a rule in `core/test_architecture.py` (e.g. `{ 'core', 'catalog', 'processing' }`).
-2. Its own models, e.g. a photo set and settings linked one-to-one to the `Model3D` it produces.
-3. `api.py` with its endpoints, e.g. create a reconstruction and upload photos. Creating one makes a `Model3D` and calls `start_job( model, 'reconstruction' )`.
-4. In `AppConfig.ready()`: `register_job_kind( 'reconstruction', run, queue = 'reconstruction' )`. `run` builds a mesh or point cloud, saves it as `model.source_file`, and calls `start_job( model, 'tiling' )`. From then on the model is tiled, listed, viewed, labelled and measured like any upload.
-5. Workers for the heavy part: `celery -A config worker -Q reconstruction` on machines with the reconstruction software (and GPU); the usual workers keep serving the default `celery` queue.
+1. A Django app in `INSTALLED_APPS`, with a rule in `core/test_architecture.py` (`{ 'core', 'catalog', 'processing' }`).
+2. Its own models: `Reconstruction` (preset, camera options, poses file) and its `Photo`s, linked one-to-one to the `Model3D` it produces.
+3. `api.py` with its endpoints: creating a reconstruction makes a `Model3D`; `start` calls `start_job( model, 'reconstruction' )`.
+4. In `AppConfig.ready()`: `register_job_kind( 'reconstruction', run, queue = 'reconstruction' )`. `run` builds the mesh, saves it as `model.source_file` and calls `start_job( model, 'tiling', follow_up_of = job )`. From then on the model is tiled, listed, viewed, labelled and measured like any upload.
+5. Workers for the heavy part: `celery -A config worker -Q celery,reconstruction` on machines with the reconstruction software (and GPU); other workers serve only the default `celery` queue.
 6. Front end: `frontend/src/reconstruction/` with its API file and pages, routes in `router.ts`, and a nav link in `App.vue`.
 
 ## What uploads are accepted
@@ -81,12 +82,16 @@ api             → core              (finds each app's api.py; no app imports a
 |---|---|
 | zip / tar / rar containing a `tileset.json` | copied as is; wrapped with a transform if it has no georeference |
 | GLB, glTF | gltf-pipeline → 3d-tiles-tools `createTilesetJson` |
-| OBJ | obj2gltf → 3d-tiles-tools |
+| OBJ | obj2gltf → 3d-tiles-tools; from `PIPELINE_LOD_MIN_SIZE` (16 MiB) up, Obj2Tiles: levels of detail and spatial tiles |
 | FBX, DAE, 3DS, PLY, STL | assimp → 3d-tiles-tools |
 | LAS, LAZ point clouds | py3dtiles (give the CRS, e.g. `EPSG:4547`, if the file does not carry one) |
 
 Meshes without a georeference are placed at the longitude/latitude given at upload, or at `DEFAULT_MODEL_LOCATION`.
-Meshes become a single tile; very large meshes would need a level-of-detail tiler.
+Other meshes become a single tile. Large OBJ meshes are tiled with levels of detail (`processing/lod_tiling.py`), so a
+viewer loads only what is in view: a `tiling.json` next to the OBJ may set the number of levels (`{"lods": 4}`; reconstructions
+write their preset's), and if Obj2Tiles is missing or fails the job falls back to a single tile and says so in its log.
+Obj2Tiles 1.6.2 ignores its `--y-up-to-z-up` flag and splits along the OBJ's x and y axes, so the mesh is rewritten Z-up for
+horizontal tiles and the tileset turned back afterwards. Install it from its GitHub releases (the macOS build runs under Rosetta).
 
 ### Limits and retries
 
@@ -96,6 +101,29 @@ A job that fails because of the upload (unsupported, damaged, unsafe or oversize
 A job that fails for a temporary reason (a converter killed by the system, a full disk, a lost database connection) is retried
 up to `PIPELINE_MAX_RETRIES` times, waiting `PIPELINE_RETRY_BACKOFF` seconds and doubling each time; the job shows
 "waiting to retry" and its attempt count meanwhile. See `.env.example` for the defaults.
+
+## 3D reconstruction from photos
+
+In the app: **Reconstruct** in the top bar (`frontend/src/reconstruction/`) walks through it: name and quality, photos (dropped as
+files or a folder, uploaded four at a time; after a reload, choosing the same photos again uploads only the missing ones),
+optional camera inputs, then live progress, cancel and try again, and how it went. Behind it is
+`/api/v1/reconstructions/` (see the docstring of `reconstruction/api.py` and `/api/docs/`): create one with a name, preset
+(`preview`, `standard`, `high`) and what is known about the cameras, upload 3–1000 photos, optionally masks and a poses file,
+then `start`. The job runs COLMAP (features, matching, cameras) and OpenMVS (dense points, mesh, texture), then the tiling job
+turns the textured mesh into 3D Tiles. The cameras are solved from whatever is known:
+
+| Known | How the result is placed |
+|---|---|
+| GPS in the photos' EXIF | georeferenced in metres; EXIF altitudes are converted from sea level with the EGM96 geoid; photos whose GPS disagrees with the solved cameras are dropped |
+| a poses file with camera centres (`name x y z`) | in the file's frame and units (`units_to_metres`, `up_axis`), at the model's placement |
+| a poses file with full poses (`name qw qx qy qz tx ty tz`) | cameras held at those poses; matching is guided by them |
+| photos only | scale unknown; at the model's placement |
+
+Known intrinsics (`camera_model`, `camera_params`, `fix_intrinsics`) and masks (black = ignore) work in every mode.
+Each finished stage is a checkpoint: a retry resumes after it. Running out of memory retries with smaller photos, up to twice.
+The `RECONSTRUCTION_*` settings in `.env.example` set tool paths, GPU use, an image-size cap and seam levelling per machine.
+The tools are not Python packages: COLMAP (`brew install colmap`) on `PATH`, OpenMVS in `RECONSTRUCTION_TOOLS_DIR/openmvs/`.
+To run the pipeline without the platform: `scripts/reconstruct_by_hand.py`.
 
 ## File storage
 
@@ -147,7 +175,7 @@ Run three processes:
 
 ```sh
 .venv/bin/python manage.py runserver                 # API on :8000
-.venv/bin/celery -A config worker -l info          # processing jobs
+.venv/bin/celery -A config worker -l info -Q celery,reconstruction   # processing jobs (reconstruction: one at a time on 8 GB)
 cd frontend && npm run dev                            # app on http://localhost:5173 (proxies /api and /media to :8000)
 ```
 
@@ -161,7 +189,8 @@ RAR uploads need an extraction tool on `PATH` that `rarfile` can use: `unrar`, `
 .venv/bin/python manage.py test                     # API, permissions, spatial search, pipeline with real converters, dependency rules,
                                                     # limits and retries, S3 storage (moto), 2019 data migrations both ways
 cd frontend && npm test && npm run typecheck        # measurement maths, tool clean-up, types
-scripts/e2e.sh                                      # browser test: sign up, upload, processing, every viewer tool, delete
+scripts/e2e.sh                                      # browser test: sign up, upload, processing, every viewer tool, delete;
+                                                    # plus a reconstruction of 8 photos where COLMAP and the Aukerman set exist
 ```
 
 `scripts/e2e.sh` creates its own database (`southcloud_e2e`), media folder and queue, starts a server and a Celery worker,
@@ -175,8 +204,15 @@ services; the end-to-end job keeps its screenshots and logs as a build artifact.
 
 - `cd frontend && npm ci && npm run build`, then `python manage.py collectstatic --noinput`.
 - Run the API with gunicorn behind nginx (`deploy/nginx.conf`) and at least one Celery worker:
-  `celery -A config worker -l info` (thread pool by default; set `CELERY_WORKER_CONCURRENCY` to taste).
+  `celery -A config worker -l info` (thread pool by default; set `CELERY_WORKER_CONCURRENCY` to taste), and on machines with
+  COLMAP and OpenMVS a reconstruction worker, `celery -A config worker -Q reconstruction --concurrency 1`.
 - With more than one server, use `STORAGE_BACKEND=s3` so all servers and workers share files (see File storage).
 - Set `DJANGO_DEBUG=false`, a real `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS` and, behind HTTPS, `DJANGO_CSRF_TRUSTED_ORIGINS`.
 - Upgrading a 2019 database: `python manage.py migrate` converts usernames to owners and Earth-centred coordinates to
   PostGIS points; the migrations are reversible.
+
+## License
+
+3DPGIS is free software under the [GNU Affero General Public License v3.0 or later](LICENSE): you may use, change and
+share it, and a modified version offered to users over a network must make its source available to them.
+Third-party software it uses keeps its own licence; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

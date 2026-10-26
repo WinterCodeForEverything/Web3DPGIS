@@ -8,11 +8,12 @@ from .models import Model3D
 
 
 def readable_models( user ):
-	"""Models the user may see: public and visible ones, plus their own (staff see everything)."""
+	"""Models the user may see: public and visible ones that have something to show, plus their own (staff see everything)."""
 	qs = Model3D.objects.all()
 	if user.is_authenticated and user.is_staff:
 		return qs
-	visible = Q( is_public = True, is_visible = True )
+	# a model with nothing uploaded or built yet (a reconstruction still collecting photos) is its owner's draft
+	visible = Q( is_public = True, is_visible = True ) & ~Q( source_file = '', tileset_path = '' )
 	if user.is_authenticated:
 		visible |= Q( owner = user )
 	return qs.filter( visible )

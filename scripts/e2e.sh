@@ -4,6 +4,8 @@
 #
 #   scripts/e2e.sh                 # uses .env for database credentials if it exists
 #   E2E_PORT=8800 scripts/e2e.sh   # other settings: E2E_DB, E2E_BROKER_URL, CHROME_PATH, E2E_ARTIFACTS, E2E_SKIP_BUILD
+#   E2E_RECON_PHOTOS=~/photos scripts/e2e.sh   # also reconstruct 8 of these photos (adds 3–5 min; needs COLMAP and OpenMVS);
+#                                              # set by default when colmap is on PATH and ../recon-data/odm_data_aukerman exists
 set -euo pipefail
 
 ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
@@ -60,7 +62,7 @@ if [ -z "${E2E_SKIP_BUILD:-}" ] || [ ! -f frontend/dist/index.html ]; then
 fi
 
 echo "== starting worker and server on :$PORT"
-"$PY" -m celery -A config worker -l warning >"$LOGS/worker.log" 2>&1 &
+"$PY" -m celery -A config worker -l warning -Q celery,reconstruction >"$LOGS/worker.log" 2>&1 &
 PIDS+=( $! )
 "$PY" manage.py runserver "127.0.0.1:$PORT" --noreload >"$LOGS/server.log" 2>&1 &
 PIDS+=( $! )
@@ -68,6 +70,9 @@ for _ in $( seq 1 60 ); do
 	curl -sf -o /dev/null "http://127.0.0.1:$PORT/api/v1/auth/me/" && break
 	sleep 0.5
 done
+
+AUKERMAN="$ROOT/../recon-data/odm_data_aukerman/images"
+if [ -z "${E2E_RECON_PHOTOS+x}" ] && command -v colmap >/dev/null && [ -d "$AUKERMAN" ]; then export E2E_RECON_PHOTOS="$AUKERMAN"; fi
 
 echo "== browser test"
 E2E_BASE_URL="http://127.0.0.1:$PORT" E2E_ARTIFACTS="$LOGS" node frontend/e2e/app.e2e.mjs

@@ -7,26 +7,32 @@ import io
 import shutil
 import tarfile
 import tempfile
+import time
+import unittest
 import zipfile
 from collections import namedtuple
+from datetime import timedelta
 from unittest import mock
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import OperationalError
-from django.test import TestCase, override_settings
+from django.test import TestCase, TransactionTestCase, override_settings
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from catalog.models import Model3D
 
 from core import storage
-from core.geodesy import ecef_to_geodetic
+from core.geodesy import ecef_to_geodetic, enu_to_ecef_matrix
 
-from . import converters, jobs, tasks, test_fixtures, tiling
+from . import converters, jobs, lod_tiling, tasks, test_fixtures, tiling
 from .converters import ConversionError, _run
 from .errors import TransientError, is_transient
+from .models import Job
 from .tilesets import tileset_location
 
 GUANGZHOU = { 'longitude': 113.26, 'latitude': 23.13, 'height': 15.0 }
@@ -102,6 +108,18 @@ class PipelineTests( PipelineTestBase ):
 	def test_zipped_obj( self ):
 		data = test_fixtures.zip_of( { 'export/readme.txt': b'hi', 'export/cube.obj': test_fixtures.obj_cube() } )
 		self.assert_ready_near( self.upload( 'export.zip', data, placement = GUANGZHOU ), 113.26, 23.13 )
+
+	def test_reprocessing_does_not_move_a_mesh( self ):
+		# the cube's centre is 2 m from its origin, so placing by the centre would shift it on every run
+		model = self.upload( 'cube.obj', test_fixtures.obj_cube(), placement = GUANGZHOU )
+		first = Model3D.objects.get( pk = model.pk ).location.coords
+		with self.captureOnCommitCallbacks( execute = True ):
+			self.assertEqual( self.client.post( f'/api/v1/models/{model.pk}/reprocess/' ).status_code, 202 )
+		model.refresh_from_db()
+		self.assertEqual( model.status, 'ready' )
+		for a, b in zip( model.location.coords, first ):
+			self.assertAlmostEqual( a, b, places = 7 )
+		self.assertEqual( model.origin.coords, ( 113.26, 23.13, 15.0 ) )
 
 	def test_default_location_when_no_placement( self ):
 		with self.settings( DEFAULT_MODEL_LOCATION = ( -75.16, 39.95, 0.0 ) ):
@@ -272,19 +290,19 @@ class ExtensionPointTests( PipelineTestBase ):
 	"""How another module plugs in: its own job kind that hands over to tiling, and new input formats."""
 
 	def test_a_new_job_kind_can_hand_its_result_to_tiling( self ):
-		# e.g. reconstruction: the job produces a mesh as the model's source, then the tiling job publishes it
+		# like reconstruction (registered under its own name): the job produces a mesh as the model's source, then the tiling job publishes it
 		def reconstruct( job, report ):
 			report.step( 'reconstructing', 50 )
 			job.model.source_file.save( 'reconstructed.glb', ContentFile( test_fixtures.glb_triangle() ), save = True )
-			jobs.start_job( job.model, 'tiling' )
+			jobs.start_job( job.model, 'tiling', follow_up_of = job )
 
 		with mock.patch.dict( jobs._kinds ), mock.patch.object( tasks.process_job, 'apply_async', wraps = tasks.process_job.apply_async ) as queued:
-			jobs.register_job_kind( 'reconstruction', reconstruct, queue = 'gpu' )
+			jobs.register_job_kind( 'photo-mesh', reconstruct, queue = 'gpu' )
 			model = Model3D.objects.create( name = 'photos', owner = self.user, source_file = 'package/photos.zip' )
 			with self.captureOnCommitCallbacks( execute = True ):
-				jobs.start_job( model, 'reconstruction' )
+				jobs.start_job( model, 'photo-mesh' )
 		model.refresh_from_db()
-		self.assertEqual( [ ( j.kind, j.status ) for j in model.jobs.order_by( 'id' ) ], [ ( 'reconstruction', 'succeeded' ), ( 'tiling', 'succeeded' ) ] )
+		self.assertEqual( [ ( j.kind, j.status ) for j in model.jobs.order_by( 'id' ) ], [ ( 'photo-mesh', 'succeeded' ), ( 'tiling', 'succeeded' ) ] )
 		self.assertEqual( model.status, 'ready' )
 		self.assertEqual( [ c.kwargs['queue'] for c in queued.call_args_list ], [ 'gpu', 'celery' ] )
 
@@ -303,10 +321,149 @@ class ExtensionPointTests( PipelineTestBase ):
 
 		with mock.patch.object( tiling, '_handlers', list( tiling._handlers ) ):
 			tiling.register_input_handler( tiling.InputHandler( 'tri', ( '.tri', ), lambda d: tiling.find_first_file( d, ( '.tri', ) ), build ), before = 'mesh' )
-			self.assertEqual( [ h.name for h in tiling.input_handlers() ], [ '3d-tiles', 'point-cloud', 'tri', 'mesh' ] )
+			self.assertEqual( [ h.name for h in tiling.input_handlers() ], [ '3d-tiles', 'point-cloud', 'lod-mesh', 'tri', 'mesh' ] )
 			model = self.upload( 'shape.tri', test_fixtures.glb_triangle(), placement = GUANGZHOU )
 		self.assert_ready_near( model, 113.26, 23.13 )
 		self.assertNotIn( '.tri', tiling.supported_extensions() )
+
+
+def tile_names( tileset ):
+	"""Content URIs of every tile under the tileset's root."""
+	def walk( tile ):
+		yield from ( [ tile['content']['uri'] ] if 'content' in tile else [] )
+		for child in tile.get( 'children' ) or []:
+			yield from walk( child )
+	with open( tileset ) as f:
+		return list( walk( json.load( f )['root'] ) )
+
+
+@unittest.skipUnless( os.path.exists( settings.PIPELINE_OBJ2TILES or '/nonexistent' ), 'Obj2Tiles is not installed' )
+@override_settings( PIPELINE_LOD_MIN_SIZE = 1 )
+class LevelOfDetailTests( PipelineTestBase ):
+	"""Large OBJ meshes go through Obj2Tiles; the threshold is set to 1 byte so a test cube counts as large."""
+
+	def test_large_obj_gets_levels_of_detail( self ):
+		model = self.upload( 'box.obj', test_fixtures.obj_tall_box(), placement = GUANGZHOU )
+		tileset = self.assert_ready_near( model, 113.26, 23.13 )
+		names = tile_names( tileset )
+		self.assertTrue( any( n.startswith( 'LOD-0/' ) for n in names ) and any( n.startswith( 'LOD-1/' ) for n in names ), names )
+		self.assertIn( 'levels of detail', model.jobs.get().log )
+		self.assertNotIn( 'root.b3dm', names )   # the root has no content of its own: the coarsest level shows first
+		self.assertFalse( os.path.exists( os.path.join( os.path.dirname( tileset ), 'root.b3dm' ) ) )
+
+	def test_the_tileset_stands_upright( self ):
+		# 2 m east, 4 m north, 10 m up; Obj2Tiles alone would lay it 10 m long towards the south
+		work = tempfile.mkdtemp()
+		self.addCleanup( shutil.rmtree, work, True )
+		obj = os.path.join( work, 'box.obj' )
+		with open( obj, 'wb' ) as f:
+			f.write( test_fixtures.obj_tall_box() )
+		tileset = lod_tiling.obj_to_lod_tileset( settings.PIPELINE_OBJ2TILES, obj, os.path.join( work, 'out' ), ( 113.26, 23.13, 0 ),
+			log = lambda s: None, lods = 2, divisions = 1 )
+		with open( tileset ) as f:
+			root = json.load( f )['root']
+		m, box, enu = root['transform'], root['boundingVolume']['box'], enu_to_ecef_matrix( 113.26, 23.13, 0 )
+		axes = [ [ sum( m[ k * 4 + i ] * box[ 3 + 3 * j + k ] for k in range( 3 ) ) for i in range( 3 ) ] for j in range( 3 ) ]
+		extent = [ round( sum( abs( sum( a[i] * enu[ c * 4 + i ] for i in range( 3 ) ) ) for a in axes ) * 2, 3 ) for c in range( 3 ) ]
+		self.assertEqual( extent, [ 2, 4, 10 ] )   # east, north, up
+		# errors from the mesh: the root about four triangle edges (≈ 4 × 6.5 m here), the tileset its diagonal
+		with open( tileset ) as f:
+			whole = json.load( f )
+		self.assertLess( min( c['geometricError'] for c in root['children'] ), 20 )
+		self.assertEqual( root['geometricError'], whole['geometricError'] )   # the empty root always refines
+		self.assertAlmostEqual( whole['geometricError'], math.sqrt( 2 ** 2 + 4 ** 2 + 10 ** 2 ), places = 2 )
+		# split horizontally: the root's children sit side by side at one height, not one above the other
+		up = lambda c: sum( sum( m[ k * 4 + i ] * c[k] for k in range( 3 ) ) * enu[ 8 + i ] for i in range( 3 ) )
+		heights = { round( up( child['boundingVolume']['box'][:3] ), 3 ) for child in root['children'] }
+		self.assertEqual( ( len( root['children'] ), len( heights ) ), ( 4, 1 ) )
+
+	def test_hints_next_to_the_mesh_set_the_levels( self ):
+		data = test_fixtures.zip_of( { 'model.obj': test_fixtures.obj_tall_box(), 'tiling.json': b'{"lods": 2}' } )
+		model = self.upload( 'mesh.zip', data, placement = GUANGZHOU )
+		self.assert_ready_near( model, 113.26, 23.13 )
+		self.assertIn( '--lods 2 ', model.jobs.get().log )
+
+	@override_settings( PIPELINE_OBJ2TILES = '/nonexistent/Obj2Tiles' )
+	def test_a_failure_falls_back_to_one_tile( self ):
+		model = self.upload( 'box.obj', test_fixtures.obj_tall_box(), placement = GUANGZHOU )
+		tileset = self.assert_ready_near( model, 113.26, 23.13 )
+		self.assertEqual( tile_names( tileset ), [ 'model.glb' ] )
+		self.assertIn( 'Levels of detail failed', model.jobs.get().log )
+
+	@override_settings( PIPELINE_LOD_MIN_SIZE = 10 ** 9 )
+	def test_small_meshes_stay_one_tile( self ):
+		model = self.upload( 'box.obj', test_fixtures.obj_tall_box(), placement = GUANGZHOU )
+		self.assertEqual( tile_names( self.assert_ready_near( model, 113.26, 23.13 ) ), [ 'model.glb' ] )
+
+
+class YUpToZUpTests( TestCase ):
+	def test_vertices_and_normals_turn_other_lines_stay( self ):
+		work = tempfile.mkdtemp()
+		self.addCleanup( shutil.rmtree, work, True )
+		src, dst = os.path.join( work, 'a.obj' ), os.path.join( work, 'b.obj' )
+		with open( src, 'w' ) as f:
+			f.write( 'mtllib a.mtl\nv 1 2 3\nv 1.5 -2 -3 0.5 0.5 0.5\nvt 0.1 0.2\nvn 0 1 0\nf 1/1/1 2/1/1 1/1/1\n' )
+		lod_tiling.y_up_to_z_up( src, dst )
+		with open( dst ) as f:
+			self.assertEqual( f.read(), 'mtllib a.mtl\nv 1 -3 2\nv 1.5 3 -2 0.5 0.5 0.5\nvt 0.1 0.2\nvn 0 -0 1\nf 1/1/1 2/1/1 1/1/1\n' )
+
+
+class JobGuardTests( PipelineTestBase ):
+	"""A job runs once: one queued or running job per model, and repeated deliveries of a task are dropped."""
+
+	def make_model( self ):
+		return Model3D.objects.create( name = 'site', owner = self.user, source_file = 'package/x.zip' )
+
+	def test_one_job_per_model( self ):
+		model = self.make_model()
+		first = jobs.start_job( model, 'tiling' )
+		with self.assertRaises( jobs.JobConflict ):
+			jobs.start_job( model, 'tiling' )
+		follow_up = jobs.start_job( model, 'tiling', follow_up_of = first )   # a job's own next step is allowed
+		Job.objects.filter( pk__in = [ first.pk, follow_up.pk ] ).update( status = Job.Status.SUCCEEDED )
+		self.assertEqual( jobs.start_job( model, 'tiling' ).status, Job.Status.QUEUED )
+
+	def test_reprocess_refuses_while_a_job_is_in_progress( self ):
+		model = self.make_model()
+		Job.objects.create( model = model, status = Job.Status.RUNNING )
+		r = self.client.post( f'/api/v1/models/{model.pk}/reprocess/' )
+		self.assertEqual( r.status_code, 409, r.data )
+		self.assertEqual( model.jobs.count(), 1 )
+
+	def deliver( self, job ):
+		with mock.patch( 'processing.tasks.run_job' ) as run:
+			tasks.process_job.apply( args = ( job.pk, ) )
+		return run
+
+	def test_repeated_delivery_of_a_finished_job_is_ignored( self ):
+		job = Job.objects.create( model = self.make_model(), status = Job.Status.SUCCEEDED, attempts = 1 )
+		self.assertFalse( self.deliver( job ).called )
+		job.refresh_from_db()
+		self.assertEqual( ( job.status, job.attempts ), ( 'succeeded', 1 ) )
+
+	def test_a_job_still_running_elsewhere_is_not_started_twice( self ):
+		job = Job.objects.create( model = self.make_model(), status = Job.Status.RUNNING, attempts = 1, heartbeat_at = timezone.now() )
+		self.assertFalse( self.deliver( job ).called )
+		self.assertEqual( Job.objects.get( pk = job.pk ).attempts, 1 )
+
+	def test_a_job_whose_worker_died_is_picked_up_again( self ):
+		stale = timezone.now() - jobs.STALE_AFTER - timedelta( seconds = 1 )
+		job = Job.objects.create( model = self.make_model(), status = Job.Status.RUNNING, attempts = 1, heartbeat_at = stale )
+		self.assertTrue( self.deliver( job ).called )
+		job.refresh_from_db()
+		self.assertEqual( ( job.status, job.attempts ), ( 'succeeded', 2 ) )
+
+
+class HeartbeatTests( TransactionTestCase ):
+	"""The heartbeat thread uses its own database connection, so its writes need committed rows."""
+
+	def test_heartbeat_is_written_while_the_job_runs( self ):
+		user = User.objects.create_user( 'carol', 'carol@example.com', 'Sm0ke-pass-3' )
+		model = Model3D.objects.create( name = 'site', owner = user, source_file = 'package/x.zip' )
+		job = Job.objects.create( model = model, status = Job.Status.RUNNING )
+		with mock.patch.object( jobs, 'HEARTBEAT_INTERVAL', timedelta( milliseconds = 20 ) ), jobs.Heartbeat( job ):
+			time.sleep( 0.3 )
+		self.assertIsNotNone( Job.objects.get( pk = job.pk ).heartbeat_at )
 
 
 class ErrorClassificationTests( TestCase ):

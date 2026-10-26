@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ApiError } from '@/api/http'
 import { modelsApi } from '@/api/models'
 import type { Model3D } from '@/api/types'
+import { reconstructionsApi } from '@/reconstruction/reconstructionsApi'
 import { useAuth } from '@/stores/auth'
 
 const auth = useAuth()
+const router = useRouter()
 const models = ref<Model3D[]>( [] )
 const count = ref( 0 )
 const loading = ref( false )
@@ -35,7 +38,7 @@ async function load() {
 	}
 	// keep refreshing while any of the listed models is still processing
 	window.clearTimeout( poll )
-	if ( models.value.some( m => m.status === 'pending' || m.status === 'processing' ) ) poll = window.setTimeout( load, 2000 )
+	if ( models.value.some( m => busy( m ) ) ) poll = window.setTimeout( load, 2000 )
 }
 
 function useMyLocation() {
@@ -53,6 +56,19 @@ async function remove( model: Model3D ) {
 	if ( !confirm( `Delete "${model.name}" and all its files, labels and flight paths?` ) ) return
 	await modelsApi.deleteModel( model.id )
 	load()
+}
+
+// a reconstruction still collecting photos: nothing uploaded or built yet, no job ever started
+const isDraft = ( m: Model3D ) => m.status === 'pending' && !m.latest_job && !m.source_name
+const busy = ( m: Model3D ) => !!m.latest_job && ( m.status === 'pending' || m.status === 'processing' )
+const isReconstruction = ( m: Model3D ) => isDraft( m ) || m.latest_job?.kind === 'reconstruction'
+const stageText = ( m: Model3D ) => m.latest_job?.stage === 'waiting to retry' ? m.latest_job.message
+	: `${m.latest_job?.kind === 'reconstruction' ? 'Reconstructing' : 'Building 3D Tiles'} · ${m.latest_job?.stage ?? ''}`
+
+async function openReconstruction( model: Model3D ) {
+	const recon = await reconstructionsApi.byModel( model.id )
+	if ( recon ) router.push( `/reconstructions/${recon.id}` )
+	else error.value = 'No reconstruction belongs to this model.'
 }
 
 async function reprocess( model: Model3D ) {
@@ -73,6 +89,7 @@ const formatLocation = ( m: Model3D ) => m.location ? `${m.location.longitude.to
 			<h1 style="margin: 0">Models</h1>
 			<span class="muted">{{ count }} found</span>
 			<span class="spacer" />
+			<RouterLink v-if="auth.user" to="/reconstruct" class="button">Reconstruct from photos</RouterLink>
 			<RouterLink v-if="auth.user" to="/upload" class="button primary">Upload a model</RouterLink>
 		</div>
 
@@ -96,19 +113,21 @@ const formatLocation = ( m: Model3D ) => m.location ? `${m.location.longitude.to
 				</RouterLink>
 				<div class="row">
 					<strong class="name">{{ m.name }}</strong>
-					<span class="badge" :class="m.status">{{ m.status }}</span>
+					<span class="badge" :class="m.status">{{ isDraft( m ) ? 'draft' : m.status }}</span>
 				</div>
 				<div class="muted small">{{ m.owner }} · {{ formatLocation( m ) }}<template v-if="m.distance_m !== null"> · {{ ( m.distance_m / 1000 ).toFixed( 1 ) }} km away</template></div>
-				<div v-if="m.status === 'pending' || m.status === 'processing'" class="small">
+				<div v-if="busy( m )" class="small">
 					<div class="progress"><div :style="{ width: ( m.latest_job?.progress ?? 0 ) + '%' }" /></div>
-					<span class="muted">{{ m.latest_job?.stage === 'waiting to retry' ? m.latest_job.message : m.latest_job?.stage }}</span>
+					<span class="muted">{{ stageText( m ) }}</span>
 				</div>
+				<div v-if="isDraft( m )" class="muted small">Reconstruction not started yet</div>
 				<div v-if="m.status === 'failed'" class="error small">{{ m.latest_job?.message }}</div>
 				<div class="row actions">
 					<RouterLink v-if="m.status === 'ready'" :to="`/models/${m.id}`" class="button small primary">Open</RouterLink>
 					<template v-if="m.can_edit">
 						<button class="small" @click="toggleVisible( m )">{{ m.is_visible ? 'Hide' : 'Show' }}</button>
-						<button v-if="m.status === 'failed'" class="small" @click="reprocess( m )">Retry</button>
+						<button v-if="isReconstruction( m ) && m.status !== 'ready'" class="small primary" @click="openReconstruction( m )">{{ isDraft( m ) ? 'Continue' : 'Details' }}</button>
+						<button v-else-if="m.status === 'failed'" class="small" @click="reprocess( m )">Retry</button>
 						<button class="small danger" @click="remove( m )">Delete</button>
 					</template>
 					<span v-if="!m.is_visible" class="muted small">hidden</span>

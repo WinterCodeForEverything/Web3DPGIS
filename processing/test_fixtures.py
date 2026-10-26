@@ -33,6 +33,13 @@ def obj_cube():
 	return ( '\n'.join( lines ) + '\n' ).encode()
 
 
+def obj_tall_box( east = 2, north = 4, up = 10 ):
+	"""A box as a Y-up OBJ, as most tools export it: x east, y up, z towards the south."""
+	vertices = [ ( x, y, z ) for x in ( 0, east ) for y in ( 0, up ) for z in ( 0, -north ) ]
+	lines = [ 'v %d %d %d' % v for v in vertices ] + [ 'vn 0 1 0' ] + [ 'f ' + ' '.join( str( i + 1 ) for i in f ) for f in CUBE_FACES ]
+	return ( '\n'.join( lines ) + '\n' ).encode()
+
+
 def ply_cube():
 	header = [ 'ply', 'format ascii 1.0', f'element vertex {len( CUBE_VERTICES )}', 'property float x', 'property float y',
 		'property float z', f'element face {len( CUBE_FACES )}', 'property list uchar int vertex_indices', 'end_header' ]

@@ -25,6 +25,10 @@ class Model3D( models.Model ):
 	tileset_path = models.CharField( max_length = 512, blank = True, help_text = 'Storage name of tileset.json, e.g. tiles/12/tileset.json' )
 	# Centre of the model as longitude, latitude, ellipsoidal height (metres)
 	location = models.PointField( srid = 4326, dim = 3, null = True, blank = True, spatial_index = True )
+	# Where the source's own (0, 0, 0) is put on the globe when it has no georeference: the placement given at upload, or
+	# the GPS origin of a reconstruction. Tiling uses it every time; `location` becomes the tileset's centre afterwards,
+	# so placing by `location` would move a mesh on every reprocess.
+	origin = models.PointField( srid = 4326, dim = 3, null = True, blank = True, spatial_index = False )
 
 	created_at = models.DateTimeField( auto_now_add = True, null = True )
 	updated_at = models.DateTimeField( auto_now = True, null = True )

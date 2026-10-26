@@ -87,3 +87,48 @@ def publish_directory( local_dir, prefix, log = None, storage = None ):
 	if log:
 		log( f'Published {len( files )} files to {"media" if is_local_storage( storage ) else "bucket " + storage.bucket_name}/{prefix}/' )
 	return len( files )
+
+
+def presigned_upload( name, content_type, expires = 3600, storage = None ):
+	"""A URL the browser can PUT name's contents to directly (S3 storage), or None on local storage."""
+	storage = storage or default_storage
+	if is_local_storage( storage ):
+		return None
+	key = storage._normalize_name( storage._clean_name( name ) )   # django-storages: adds the bucket location prefix
+	return storage.bucket.meta.client.generate_presigned_url( 'put_object', ExpiresIn = expires,
+		Params = { 'Bucket': storage.bucket_name, 'Key': key, 'ContentType': content_type } )
+
+
+def upload_directory( local_dir, prefix, skip = (), storage = None ):
+	"""Copy files under local_dir to prefix/ when missing there or of a different size, e.g. a job's checkpoints.
+	Top-level folders named in skip are left out. Returns the number of files copied."""
+	storage = storage or default_storage
+	prefix = prefix.strip( '/' )
+	copied = 0
+	for d, dirs, names in os.walk( local_dir ):
+		if os.path.samefile( d, local_dir ):
+			dirs[:] = [ x for x in dirs if x not in skip ]
+		for f in names:
+			path = os.path.join( d, f )
+			name = prefix + '/' + os.path.relpath( path, local_dir ).replace( os.sep, '/' )
+			if storage.exists( name ) and storage.size( name ) == os.path.getsize( path ):
+				continue
+			if storage.exists( name ):
+				storage.delete( name )
+			with open( path, 'rb' ) as src:
+				storage.save( name, src )
+			copied += 1
+	return copied
+
+
+def download_prefix( prefix, local_dir, storage = None ):
+	"""Copy every stored file under prefix/ into local_dir, keeping the folder structure. Returns the number of files."""
+	storage = storage or default_storage
+	prefix = prefix.strip( '/' )
+	names = list_prefix( prefix, storage )
+	for name in names:
+		target = os.path.join( local_dir, os.path.relpath( name, prefix ) )
+		os.makedirs( os.path.dirname( target ), exist_ok = True )
+		with storage.open( name, 'rb' ) as src, open( target, 'wb' ) as dst:
+			shutil.copyfileobj( src, dst, 1024 * 1024 )
+	return len( names )
