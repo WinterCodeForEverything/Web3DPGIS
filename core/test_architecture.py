@@ -4,6 +4,7 @@ core            shared building blocks; imports no app
 processing      job engine and tiling; knows models only through its Job.model foreign key
 catalog         3D models; starts processing jobs
 labels, viewer_tools, …   features attached to a model
+reconstruction  photos to a model; a job kind that hands its mesh to the tiling job
 api             only puts the apps' own api modules together
 
 A new app (e.g. reconstruction) gets an entry here; tests and migrations are not checked.
@@ -23,6 +24,7 @@ ALLOWED = {
 	'catalog': { 'core', 'processing' },
 	'labels': { 'core', 'catalog' },
 	'viewer_tools': { 'core', 'catalog' },
+	'reconstruction': { 'core', 'catalog', 'processing' },
 }
 
 

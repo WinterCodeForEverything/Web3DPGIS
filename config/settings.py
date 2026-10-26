@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+import platform
+import tempfile
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
@@ -65,6 +67,7 @@ INSTALLED_APPS = [
 	'viewer_tools',
 	'labels',
 	'processing',
+	'reconstruction',
 	'api',
 ]
 
@@ -259,6 +262,25 @@ PIPELINE_WORK_DIR = env( 'PIPELINE_WORK_DIR' ) or None
 DEFAULT_MODEL_LOCATION = tuple(float(v) for v in env('DEFAULT_MODEL_LOCATION', '113.26,23.13,0').split(','))
 
 MAX_UPLOAD_SIZE = int(env('MAX_UPLOAD_SIZE', str(2 * 1024 ** 3)))
+
+# 3D reconstruction from photos (reconstruction app): COLMAP from PATH, OpenMVS in RECONSTRUCTION_TOOLS_DIR/openmvs/
+RECONSTRUCTION_QUEUE = env( 'RECONSTRUCTION_QUEUE', 'reconstruction' )   # workers run: celery -A config worker -Q celery,reconstruction
+RECONSTRUCTION_COLMAP = env( 'RECONSTRUCTION_COLMAP', 'colmap' )
+RECONSTRUCTION_TOOLS_DIR = Path( env( 'RECONSTRUCTION_TOOLS_DIR' ) or BASE_DIR.parent / 'recon-tools' )
+RECONSTRUCTION_USE_GPU = env_bool( 'RECONSTRUCTION_USE_GPU', False )        # needs a CUDA build of COLMAP
+# caps every preset's image size, e.g. 2000 on an 8 GB machine; 0 keeps the presets' sizes
+RECONSTRUCTION_MAX_IMAGE_SIZE = int( env( 'RECONSTRUCTION_MAX_IMAGE_SIZE', '0' ) ) or None
+# OpenMVS 2.4.0's macOS build breaks texture seam levelling (black patches, coloured borders), so it is off there
+RECONSTRUCTION_SEAM_LEVELING = env_bool( 'RECONSTRUCTION_SEAM_LEVELING', platform.system() != 'Darwin' )
+# with S3 storage: local work folders, copied to recon/<id>/work/ after each stage (on local storage the job works in media/)
+RECONSTRUCTION_WORK_DIR = Path( env( 'RECONSTRUCTION_WORK_DIR' ) or Path( tempfile.gettempdir() ) / '3dpgis-reconstruction' )
+RECONSTRUCTION_MIN_PHOTOS = int( env( 'RECONSTRUCTION_MIN_PHOTOS', '3' ) )
+RECONSTRUCTION_MAX_PHOTOS = int( env( 'RECONSTRUCTION_MAX_PHOTOS', '1000' ) )
+RECONSTRUCTION_MAX_PHOTO_SIZE = int( env( 'RECONSTRUCTION_MAX_PHOTO_SIZE', str( 50 * 1024 ** 2 ) ) )   # bytes per photo
+RECONSTRUCTION_UPLOAD_URL_EXPIRES = int( env( 'RECONSTRUCTION_UPLOAD_URL_EXPIRES', '3600' ) )         # seconds
+# EGM96 geoid for EXIF altitudes (above sea level → above the ellipsoid); fetched once from cdn.proj.org when allowed
+RECONSTRUCTION_GEOID_GRID = env( 'RECONSTRUCTION_GEOID_GRID', 'us_nga_egm96_15.tif' )
+RECONSTRUCTION_GEOID_DOWNLOAD = env_bool( 'RECONSTRUCTION_GEOID_DOWNLOAD', True )
 
 # Archive limits, checked before anything is extracted (protects against "zip bombs")
 PIPELINE_MAX_EXTRACTED_SIZE = int( env( 'PIPELINE_MAX_EXTRACTED_SIZE', str( 20 * 1024 ** 3 ) ) )   # bytes unpacked

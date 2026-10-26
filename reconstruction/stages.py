@@ -74,7 +74,7 @@ class Tools:
 class Options:
 	preset: str = 'standard'
 	max_image_size: int | None = None         # caps the preset's image size on this machine
-	resolution_shift: int = 0                 # densify this many levels lower (raised after an out-of-memory error)
+	resolution_shift: int = 0                 # steps down after running out of memory: smaller photos, one densify level lower
 	use_gpu: bool = False
 	seam_leveling: bool = True                # off on macOS: OpenMVS 2.4.0's build there breaks it
 	camera_model: str = 'SIMPLE_RADIAL'
@@ -103,7 +103,9 @@ class Options:
 	@property
 	def image_size( self ):
 		size = PRESETS[ self.preset ]['max_image_size']
-		return min( size, self.max_image_size ) if self.max_image_size else size
+		size = min( size, self.max_image_size ) if self.max_image_size else size
+		# each step down after running out of memory also shrinks the photos by 30% for the stages still to run
+		return round( size * 0.7 ** self.resolution_shift )
 
 
 @dataclass
