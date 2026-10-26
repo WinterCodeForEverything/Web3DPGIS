@@ -148,6 +148,21 @@ class ReconstructionAPITests( APITestBase ):
 		self.assertEqual( bob.get( URL ).data['results'] if isinstance( bob.get( URL ).data, dict ) else bob.get( URL ).data, [] )
 		self.assertIn( self.client.__class__().post( URL, { 'name': 'x' }, format = 'json' ).status_code, ( 401, 403 ) )
 
+	def test_limits_and_lookup_by_model( self ):
+		limits = self.client.__class__().get( f'{URL}limits/' ).data
+		self.assertEqual( ( limits['min_photos'], limits['direct_upload'], limits['camera_models']['OPENCV'] ), ( 3, False, 8 ) )
+		self.assertEqual( set( limits['presets'] ), { 'preview', 'standard', 'high' } )
+		data = self.create()
+		self.create()
+		self.assertEqual( [ r['id'] for r in self.client.get( f'{URL}?model={data["model"]}' ).data['results'] ], [ data['id'] ] )
+
+	def test_a_draft_is_hidden_from_others_until_it_has_a_result( self ):
+		data = self.create()   # public by default
+		self.assertEqual( self.as_user( self.bob ).get( f'/api/v1/models/{data["model"]}/' ).status_code, 404 )
+		self.assertEqual( self.client.get( f'/api/v1/models/{data["model"]}/' ).status_code, 200 )
+		Model3D.objects.filter( pk = data['model'] ).update( source_file = f'recon/{data["id"]}/result/model.zip' )
+		self.assertEqual( self.as_user( self.bob ).get( f'/api/v1/models/{data["model"]}/' ).status_code, 200 )
+
 	def test_deleting_removes_the_model_and_files( self ):
 		data = self.create()
 		self.upload( data['id'], 'a.jpg' )

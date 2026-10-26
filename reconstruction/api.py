@@ -36,7 +36,7 @@ from processing.models import Job
 from . import camera_inputs as ci
 from .job import clear_checkpoints
 from .models import Photo, Reconstruction, _mask_path, _photo_path
-from .stages import PHOTO_TYPES
+from .stages import PHOTO_TYPES, PRESETS
 
 ACTIVE = [ Job.Status.QUEUED, Job.Status.RUNNING ]
 
@@ -177,9 +177,25 @@ class ReconstructionViewSet( viewsets.ModelViewSet ):
 
 	def get_queryset( self ):
 		recons = Reconstruction.objects.select_related( 'model' )
-		if getattr( self, 'swagger_fake_view', False ) or self.request.user.is_staff:
+		if getattr( self, 'swagger_fake_view', False ):
 			return recons
-		return recons.filter( model__owner = self.request.user )
+		if not self.request.user.is_staff:
+			recons = recons.filter( model__owner = self.request.user )
+		model = self.request.query_params.get( 'model' )
+		if model:   # the reconstruction behind a model in the model list
+			recons = recons.filter( model_id = int( model ) if model.isdigit() else -1 )
+		return recons
+
+	@action( detail = False, methods = [ 'get' ], permission_classes = [ permissions.AllowAny ] )
+	def limits( self, request ):
+		"""What this server accepts, so a client can check photos and options before uploading."""
+		return Response( {
+			'min_photos': settings.RECONSTRUCTION_MIN_PHOTOS, 'max_photos': settings.RECONSTRUCTION_MAX_PHOTOS,
+			'max_photo_size': settings.RECONSTRUCTION_MAX_PHOTO_SIZE, 'photo_types': list( PHOTO_TYPES ),
+			'direct_upload': not storage.is_local_storage(),   # presigned PUT + confirm instead of multipart
+			'presets': { name: { 'max_image_size': p['max_image_size'], 'levels_of_detail': p['lods'] } for name, p in PRESETS.items() },
+			'camera_models': ci.CAMERA_PARAM_COUNTS,
+		} )
 
 	def _editable( self ):
 		"""The reconstruction, once it is clear no job is changing it."""
