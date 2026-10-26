@@ -4,6 +4,7 @@ Checkpoints: the pipeline marks each finished stage in its work folder, and a re
 storage the work folder is recon/<id>/work/ in the media folder itself; with S3 storage it is a local folder that is
 copied to recon/<id>/work/ after every stage and restored from there, so another worker can carry on.
 """
+import json
 import os
 import shutil
 import time
@@ -19,9 +20,10 @@ from core import storage
 from core.geoid import geoid_height
 from processing.errors import PipelineError, TransientError
 from processing.jobs import start_job
+from processing.tiling import TILING_HINTS
 
 from .models import Reconstruction
-from .stages import STAGES, Cancelled, Options, OutOfMemory, Pipeline, ReconstructionError, TemporaryError, Tools
+from .stages import PRESETS, STAGES, Cancelled, Options, OutOfMemory, Pipeline, ReconstructionError, TemporaryError, Tools
 
 # after running out of memory twice at smaller sizes, more of the same will not help
 MAX_RESOLUTION_SHIFT = 2
@@ -115,11 +117,13 @@ def _forget_partial_output( work, stage ):
 
 
 def _publish_result( recon, model, work ):
-	"""Zip result/ (model.obj, its material and textures) into recon/<id>/result/model.zip and make it the model's source."""
+	"""Zip result/ (model.obj, its material and textures, plus tiling hints) into recon/<id>/result/model.zip and make it the model's source."""
 	archive = work / 'model.zip'
 	with zipfile.ZipFile( archive, 'w', zipfile.ZIP_DEFLATED ) as z:
 		for f in sorted( ( work / 'result' ).iterdir() ):
 			z.write( f, f.name )
+		# the preset's levels of detail, for the tiling job when the mesh is large enough for them
+		z.writestr( TILING_HINTS, json.dumps( { 'lods': PRESETS[ recon.preset ]['lods'] } ) )
 	name = f'{recon.prefix}/result/model.zip'
 	if default_storage.exists( name ):
 		default_storage.delete( name )

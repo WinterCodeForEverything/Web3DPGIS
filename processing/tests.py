@@ -8,11 +8,13 @@ import shutil
 import tarfile
 import tempfile
 import time
+import unittest
 import zipfile
 from collections import namedtuple
 from datetime import timedelta
 from unittest import mock
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -25,9 +27,9 @@ from rest_framework.test import APIClient
 from catalog.models import Model3D
 
 from core import storage
-from core.geodesy import ecef_to_geodetic
+from core.geodesy import ecef_to_geodetic, enu_to_ecef_matrix
 
-from . import converters, jobs, tasks, test_fixtures, tiling
+from . import converters, jobs, lod_tiling, tasks, test_fixtures, tiling
 from .converters import ConversionError, _run
 from .errors import TransientError, is_transient
 from .models import Job
@@ -307,10 +309,83 @@ class ExtensionPointTests( PipelineTestBase ):
 
 		with mock.patch.object( tiling, '_handlers', list( tiling._handlers ) ):
 			tiling.register_input_handler( tiling.InputHandler( 'tri', ( '.tri', ), lambda d: tiling.find_first_file( d, ( '.tri', ) ), build ), before = 'mesh' )
-			self.assertEqual( [ h.name for h in tiling.input_handlers() ], [ '3d-tiles', 'point-cloud', 'tri', 'mesh' ] )
+			self.assertEqual( [ h.name for h in tiling.input_handlers() ], [ '3d-tiles', 'point-cloud', 'lod-mesh', 'tri', 'mesh' ] )
 			model = self.upload( 'shape.tri', test_fixtures.glb_triangle(), placement = GUANGZHOU )
 		self.assert_ready_near( model, 113.26, 23.13 )
 		self.assertNotIn( '.tri', tiling.supported_extensions() )
+
+
+def tile_names( tileset ):
+	"""Content URIs of every tile under the tileset's root."""
+	def walk( tile ):
+		yield from ( [ tile['content']['uri'] ] if 'content' in tile else [] )
+		for child in tile.get( 'children' ) or []:
+			yield from walk( child )
+	with open( tileset ) as f:
+		return list( walk( json.load( f )['root'] ) )
+
+
+@unittest.skipUnless( os.path.exists( settings.PIPELINE_OBJ2TILES or '/nonexistent' ), 'Obj2Tiles is not installed' )
+@override_settings( PIPELINE_LOD_MIN_SIZE = 1 )
+class LevelOfDetailTests( PipelineTestBase ):
+	"""Large OBJ meshes go through Obj2Tiles; the threshold is set to 1 byte so a test cube counts as large."""
+
+	def test_large_obj_gets_levels_of_detail( self ):
+		model = self.upload( 'box.obj', test_fixtures.obj_tall_box(), placement = GUANGZHOU )
+		tileset = self.assert_ready_near( model, 113.26, 23.13 )
+		names = tile_names( tileset )
+		self.assertTrue( any( n.startswith( 'LOD-0/' ) for n in names ) and any( n.startswith( 'LOD-1/' ) for n in names ), names )
+		self.assertIn( 'levels of detail', model.jobs.get().log )
+
+	def test_the_tileset_stands_upright( self ):
+		# 2 m east, 4 m north, 10 m up; Obj2Tiles alone would lay it 10 m long towards the south
+		work = tempfile.mkdtemp()
+		self.addCleanup( shutil.rmtree, work, True )
+		obj = os.path.join( work, 'box.obj' )
+		with open( obj, 'wb' ) as f:
+			f.write( test_fixtures.obj_tall_box() )
+		tileset = lod_tiling.obj_to_lod_tileset( settings.PIPELINE_OBJ2TILES, obj, os.path.join( work, 'out' ), ( 113.26, 23.13, 0 ),
+			log = lambda s: None, lods = 2, divisions = 1 )
+		with open( tileset ) as f:
+			root = json.load( f )['root']
+		m, box, enu = root['transform'], root['boundingVolume']['box'], enu_to_ecef_matrix( 113.26, 23.13, 0 )
+		axes = [ [ sum( m[ k * 4 + i ] * box[ 3 + 3 * j + k ] for k in range( 3 ) ) for i in range( 3 ) ] for j in range( 3 ) ]
+		extent = [ round( sum( abs( sum( a[i] * enu[ c * 4 + i ] for i in range( 3 ) ) ) for a in axes ) * 2, 3 ) for c in range( 3 ) ]
+		self.assertEqual( extent, [ 2, 4, 10 ] )   # east, north, up
+		# split horizontally: the root's children sit side by side at one height, not one above the other
+		up = lambda c: sum( sum( m[ k * 4 + i ] * c[k] for k in range( 3 ) ) * enu[ 8 + i ] for i in range( 3 ) )
+		heights = { round( up( child['boundingVolume']['box'][:3] ), 3 ) for child in root['children'] }
+		self.assertEqual( ( len( root['children'] ), len( heights ) ), ( 4, 1 ) )
+
+	def test_hints_next_to_the_mesh_set_the_levels( self ):
+		data = test_fixtures.zip_of( { 'model.obj': test_fixtures.obj_tall_box(), 'tiling.json': b'{"lods": 2}' } )
+		model = self.upload( 'mesh.zip', data, placement = GUANGZHOU )
+		self.assert_ready_near( model, 113.26, 23.13 )
+		self.assertIn( '--lods 2 ', model.jobs.get().log )
+
+	@override_settings( PIPELINE_OBJ2TILES = '/nonexistent/Obj2Tiles' )
+	def test_a_failure_falls_back_to_one_tile( self ):
+		model = self.upload( 'box.obj', test_fixtures.obj_tall_box(), placement = GUANGZHOU )
+		tileset = self.assert_ready_near( model, 113.26, 23.13 )
+		self.assertEqual( tile_names( tileset ), [ 'model.glb' ] )
+		self.assertIn( 'Levels of detail failed', model.jobs.get().log )
+
+	@override_settings( PIPELINE_LOD_MIN_SIZE = 10 ** 9 )
+	def test_small_meshes_stay_one_tile( self ):
+		model = self.upload( 'box.obj', test_fixtures.obj_tall_box(), placement = GUANGZHOU )
+		self.assertEqual( tile_names( self.assert_ready_near( model, 113.26, 23.13 ) ), [ 'model.glb' ] )
+
+
+class YUpToZUpTests( TestCase ):
+	def test_vertices_and_normals_turn_other_lines_stay( self ):
+		work = tempfile.mkdtemp()
+		self.addCleanup( shutil.rmtree, work, True )
+		src, dst = os.path.join( work, 'a.obj' ), os.path.join( work, 'b.obj' )
+		with open( src, 'w' ) as f:
+			f.write( 'mtllib a.mtl\nv 1 2 3\nv 1.5 -2 -3 0.5 0.5 0.5\nvt 0.1 0.2\nvn 0 1 0\nf 1/1/1 2/1/1 1/1/1\n' )
+		lod_tiling.y_up_to_z_up( src, dst )
+		with open( dst ) as f:
+			self.assertEqual( f.read(), 'mtllib a.mtl\nv 1 -3 2\nv 1.5 3 -2 0.5 0.5 0.5\nvt 0.1 0.2\nvn 0 -0 1\nf 1/1/1 2/1/1 1/1/1\n' )
 
 
 class JobGuardTests( PipelineTestBase ):

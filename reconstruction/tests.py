@@ -1,4 +1,5 @@
 """Reconstruction API and job wrapper, without running COLMAP or OpenMVS (the pipeline is replaced where a job runs)."""
+import json
 import os
 import zipfile
 from pathlib import Path
@@ -196,7 +197,8 @@ class ReconstructionJobTests( APITestBase ):
 		self.model.refresh_from_db(); self.recon.refresh_from_db()
 		self.assertEqual( self.model.source_file.name, f'recon/{self.recon.pk}/result/model.zip' )
 		with zipfile.ZipFile( self.model.source_file.path ) as z:
-			self.assertEqual( sorted( z.namelist() ), [ 'model.mtl', 'model.obj' ] )
+			self.assertEqual( sorted( z.namelist() ), [ 'model.mtl', 'model.obj', 'tiling.json' ] )
+			self.assertEqual( json.loads( z.read( 'tiling.json' ) ), { 'lods': 3 } )
 		self.assertEqual( self.model.location.coords, ( -83.8, 41.3, 250.0 ) )
 		self.assertEqual( ( self.recon.mode, self.recon.stats['registered_photos'], self.recon.stats['stages'] ), ( 'gps', 3, { 'prepare': 1.0 } ) )
 		options = self.seen['options']

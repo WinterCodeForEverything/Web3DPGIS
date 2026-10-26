@@ -82,12 +82,16 @@ api             → core              (finds each app's api.py; no app imports a
 |---|---|
 | zip / tar / rar containing a `tileset.json` | copied as is; wrapped with a transform if it has no georeference |
 | GLB, glTF | gltf-pipeline → 3d-tiles-tools `createTilesetJson` |
-| OBJ | obj2gltf → 3d-tiles-tools |
+| OBJ | obj2gltf → 3d-tiles-tools; from `PIPELINE_LOD_MIN_SIZE` (16 MiB) up, Obj2Tiles: levels of detail and spatial tiles |
 | FBX, DAE, 3DS, PLY, STL | assimp → 3d-tiles-tools |
 | LAS, LAZ point clouds | py3dtiles (give the CRS, e.g. `EPSG:4547`, if the file does not carry one) |
 
 Meshes without a georeference are placed at the longitude/latitude given at upload, or at `DEFAULT_MODEL_LOCATION`.
-Meshes become a single tile; very large meshes would need a level-of-detail tiler.
+Other meshes become a single tile. Large OBJ meshes are tiled with levels of detail (`processing/lod_tiling.py`), so a
+viewer loads only what is in view: a `tiling.json` next to the OBJ may set the number of levels (`{"lods": 4}`; reconstructions
+write their preset's), and if Obj2Tiles is missing or fails the job falls back to a single tile and says so in its log.
+Obj2Tiles 1.6.2 ignores its `--y-up-to-z-up` flag and splits along the OBJ's x and y axes, so the mesh is rewritten Z-up for
+horizontal tiles and the tileset turned back afterwards. Install it from its GitHub releases (the macOS build runs under Rosetta).
 
 ### Limits and retries
 

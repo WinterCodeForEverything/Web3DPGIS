@@ -27,6 +27,8 @@ from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Callable
 
+from processing.lod_tiling import obj_to_lod_tileset
+
 from . import camera_inputs as ci
 
 # image sizes are the preset's; a machine can cap them (Options.max_image_size), e.g. 2000 on an 8 GB laptop
@@ -442,11 +444,10 @@ class Pipeline:
 
 	def _export( self ):
 		"""result/: the textured mesh as model.obj in metres, written Y-up as OBJ files usually are, with its material
-		and textures; model_zup.obj in the work folder keeps east-north-up (Z up) for Obj2Tiles."""
+		and textures."""
 		o, dense, result = self.options, self.paths['dense'], self.paths['result']
 		shutil.rmtree( result, ignore_errors = True ); result.mkdir()
 		ci.transform_obj( dense / 'model.obj', result / 'model.obj', o.units_to_metres, o.up_axis, y_up = True )
-		ci.transform_obj( dense / 'model.obj', dense / 'model_zup.obj', o.units_to_metres, o.up_axis )
 		mtl = dense / 'model.mtl'
 		shutil.copy2( mtl, result )
 		for line in mtl.read_text().splitlines():
@@ -460,10 +461,8 @@ class Pipeline:
 		"""3D Tiles with levels of detail straight from Obj2Tiles (benchmarks; the platform's tiling job does this)."""
 		lon, lat, alt = self.report.get( 'placement' ) or ( 0.0, 0.0, 0.0 )
 		tiles = self.paths['tiles']
-		shutil.rmtree( tiles, ignore_errors = True )
-		# OpenMVS writes a Z-up OBJ; Obj2Tiles assumes Y-up unless told, and the model would stand on its edge
-		self._cmd( [ self.tools.obj2tiles, '--y-up-to-z-up', '--lods', self.preset['lods'], '--divisions', 2, '--lat', lat, '--lon', lon,
-			'--alt', alt, self.paths['dense'] / 'model_zup.obj', tiles ], 'tiling' )
+		obj_to_lod_tileset( self.tools.obj2tiles, self.paths['result'] / 'model.obj', tiles, ( lon, lat, alt ), self.log,
+			lods = self.preset['lods'], run = lambda args: self._cmd( args, 'tiling' ) )
 		self.report[ 'tiles_mb' ] = disk_mb( tiles )
 
 

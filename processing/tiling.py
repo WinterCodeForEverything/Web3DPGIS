@@ -1,7 +1,8 @@
 """The tiling job: turn a model's source file into a georeferenced 3D Tiles tileset and publish it.
 
 The source is unpacked if it is an archive, then the first input handler that finds something it can use builds the
-tileset. Handlers are tried in order: an existing 3D Tiles tileset, a point cloud, a mesh. Another module can add one,
+tileset. Handlers are tried in order: an existing 3D Tiles tileset, a point cloud, a large OBJ mesh (levels of detail,
+lod_tiling.py), any other mesh (one tile). Another module can add one,
 e.g. for a new file format:
 
     register_input_handler( InputHandler( 'e57', ( '.e57', ), find = …, build = … ), before = 'mesh' )
@@ -19,7 +20,7 @@ from django.contrib.gis.geos import Point
 from core import storage
 from core.geodesy import enu_to_ecef_matrix
 
-from . import converters
+from . import converters, lod_tiling
 from .archives import ARCHIVE_EXTENSIONS, Limits, ensure_free_space, extract, is_archive
 from .errors import PipelineError
 from .jobs import JobReporter
@@ -151,8 +152,44 @@ def _tile_mesh( src: TilingInput ):
 	return os.path.join( src.out_dir, 'tileset.json' )
 
 
+# a JSON file next to the mesh may ask for its own number of levels, e.g. {"lods": 4} from a High reconstruction
+TILING_HINTS = 'tiling.json'
+
+
+def _find_large_obj( directory ):
+	"""An OBJ big enough to be worth levels of detail, when Obj2Tiles is configured."""
+	obj = find_first_file( directory, ( '.obj', ) )
+	if obj and settings.PIPELINE_OBJ2TILES and os.path.getsize( obj ) >= settings.PIPELINE_LOD_MIN_SIZE:
+		return obj
+	return None
+
+
+def _tile_lod_mesh( src: TilingInput ):
+	hints_path = os.path.join( os.path.dirname( src.path ), TILING_HINTS )
+	try:
+		with open( hints_path, encoding = 'utf-8' ) as f:
+			hints = json.load( f )
+	except ( OSError, ValueError ):
+		hints = {}
+	lods = int( hints.get( 'lods' ) or settings.PIPELINE_LOD_LEVELS )
+	size_mb = os.path.getsize( src.path ) / 2 ** 20
+	src.report.step( f'building {lods} levels of detail', 30 )
+	src.report.log( f'{os.path.basename( src.path )} is {size_mb:.0f} MB: tiling it with levels of detail' )
+	try:
+		return lod_tiling.obj_to_lod_tileset( settings.PIPELINE_OBJ2TILES, src.path, src.out_dir, src.placement, src.report.log,
+			lods = lods, divisions = settings.PIPELINE_LOD_DIVISIONS, max_texture_size = settings.PIPELINE_LOD_MAX_TEXTURE_SIZE,
+			texture_quality = settings.PIPELINE_LOD_TEXTURE_QUALITY, run = lambda args: converters._run( args, src.report.log ) )
+	except ( converters.ConversionError, FileNotFoundError, ValueError ) as exc:
+		# a temporary failure (the tool was killed) is raised on for a retry; anything else falls back to one tile
+		src.report.log( f'Levels of detail failed ({exc}); building a single tile instead' )
+		shutil.rmtree( src.out_dir, ignore_errors = True )
+		return _tile_mesh( src )
+
+
 register_input_handler( InputHandler( '3d-tiles', (), find_tileset, _copy_tileset ) )
 register_input_handler( InputHandler( 'point-cloud', POINTCLOUD_EXTENSIONS, lambda d: find_first_file( d, POINTCLOUD_EXTENSIONS ), _tile_point_cloud ) )
+# OBJ only: Obj2Tiles reads nothing else; smaller meshes and other formats become a single tile
+register_input_handler( InputHandler( 'lod-mesh', (), _find_large_obj, _tile_lod_mesh ) )
 register_input_handler( InputHandler( 'mesh', tuple( MESH_EXTENSIONS ), lambda d: find_first_file( d, tuple( MESH_EXTENSIONS ) ), _tile_mesh ) )
 
 

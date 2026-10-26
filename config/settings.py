@@ -257,6 +257,14 @@ PIPELINE_NODE_BIN = env('PIPELINE_NODE_BIN', str(BASE_DIR / 'converters' / 'node
 PIPELINE_ASSIMP = env('PIPELINE_ASSIMP', 'assimp')
 # Local scratch space for jobs (downloads, extraction, conversion); the system temp folder when empty
 PIPELINE_WORK_DIR = env( 'PIPELINE_WORK_DIR' ) or None
+# Level-of-detail tiling for large OBJ meshes (processing/lod_tiling.py); an empty PIPELINE_OBJ2TILES turns it off.
+# The macOS release of Obj2Tiles 1.6.2 is an x86_64 build and runs under Rosetta.
+PIPELINE_OBJ2TILES = env( 'PIPELINE_OBJ2TILES', str( BASE_DIR.parent / 'recon-tools' / 'obj2tiles' / 'Obj2Tiles' ) )
+PIPELINE_LOD_MIN_SIZE = int( env( 'PIPELINE_LOD_MIN_SIZE', str( 16 * 1024 ** 2 ) ) )   # OBJ bytes; smaller meshes stay one tile
+PIPELINE_LOD_LEVELS = int( env( 'PIPELINE_LOD_LEVELS', '3' ) )
+PIPELINE_LOD_DIVISIONS = int( env( 'PIPELINE_LOD_DIVISIONS', '2' ) )
+PIPELINE_LOD_MAX_TEXTURE_SIZE = int( env( 'PIPELINE_LOD_MAX_TEXTURE_SIZE', '2048' ) )   # pixels per side of a tile's texture
+PIPELINE_LOD_TEXTURE_QUALITY = int( env( 'PIPELINE_LOD_TEXTURE_QUALITY', '75' ) )       # JPEG quality
 
 # Where a model without its own georeference is placed (longitude, latitude, height in metres).
 DEFAULT_MODEL_LOCATION = tuple(float(v) for v in env('DEFAULT_MODEL_LOCATION', '113.26,23.13,0').split(','))
