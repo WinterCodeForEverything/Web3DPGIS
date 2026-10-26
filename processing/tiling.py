@@ -178,7 +178,7 @@ def _tile_lod_mesh( src: TilingInput ):
 	try:
 		return lod_tiling.obj_to_lod_tileset( settings.PIPELINE_OBJ2TILES, src.path, src.out_dir, src.placement, src.report.log,
 			lods = lods, divisions = settings.PIPELINE_LOD_DIVISIONS, max_texture_size = settings.PIPELINE_LOD_MAX_TEXTURE_SIZE,
-			texture_quality = settings.PIPELINE_LOD_TEXTURE_QUALITY, run = lambda args: converters._run( args, src.report.log ) )
+			texture_quality = settings.PIPELINE_LOD_TEXTURE_QUALITY, run = lambda args: converters._run( args, src.report.log, timeout = settings.PIPELINE_LOD_TIMEOUT ) )
 	except ( converters.ConversionError, FileNotFoundError, ValueError ) as exc:
 		# a temporary failure (the tool was killed) is raised on for a retry; anything else falls back to one tile
 		src.report.log( f'Levels of detail failed ({exc}); building a single tile instead' )

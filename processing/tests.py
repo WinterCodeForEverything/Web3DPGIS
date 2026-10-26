@@ -336,6 +336,8 @@ class LevelOfDetailTests( PipelineTestBase ):
 		names = tile_names( tileset )
 		self.assertTrue( any( n.startswith( 'LOD-0/' ) for n in names ) and any( n.startswith( 'LOD-1/' ) for n in names ), names )
 		self.assertIn( 'levels of detail', model.jobs.get().log )
+		self.assertNotIn( 'root.b3dm', names )   # the root has no content of its own: the coarsest level shows first
+		self.assertFalse( os.path.exists( os.path.join( os.path.dirname( tileset ), 'root.b3dm' ) ) )
 
 	def test_the_tileset_stands_upright( self ):
 		# 2 m east, 4 m north, 10 m up; Obj2Tiles alone would lay it 10 m long towards the south
@@ -352,6 +354,12 @@ class LevelOfDetailTests( PipelineTestBase ):
 		axes = [ [ sum( m[ k * 4 + i ] * box[ 3 + 3 * j + k ] for k in range( 3 ) ) for i in range( 3 ) ] for j in range( 3 ) ]
 		extent = [ round( sum( abs( sum( a[i] * enu[ c * 4 + i ] for i in range( 3 ) ) ) for a in axes ) * 2, 3 ) for c in range( 3 ) ]
 		self.assertEqual( extent, [ 2, 4, 10 ] )   # east, north, up
+		# errors from the mesh: the root about four triangle edges (≈ 4 × 6.5 m here), the tileset its diagonal
+		with open( tileset ) as f:
+			whole = json.load( f )
+		self.assertLess( min( c['geometricError'] for c in root['children'] ), 20 )
+		self.assertEqual( root['geometricError'], whole['geometricError'] )   # the empty root always refines
+		self.assertAlmostEqual( whole['geometricError'], math.sqrt( 2 ** 2 + 4 ** 2 + 10 ** 2 ), places = 2 )
 		# split horizontally: the root's children sit side by side at one height, not one above the other
 		up = lambda c: sum( sum( m[ k * 4 + i ] * c[k] for k in range( 3 ) ) * enu[ 8 + i ] for i in range( 3 ) )
 		heights = { round( up( child['boundingVolume']['box'][:3] ), 3 ) for child in root['children'] }

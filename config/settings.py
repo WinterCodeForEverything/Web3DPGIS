@@ -262,8 +262,12 @@ PIPELINE_WORK_DIR = env( 'PIPELINE_WORK_DIR' ) or None
 PIPELINE_OBJ2TILES = env( 'PIPELINE_OBJ2TILES', str( BASE_DIR.parent / 'recon-tools' / 'obj2tiles' / 'Obj2Tiles' ) )
 PIPELINE_LOD_MIN_SIZE = int( env( 'PIPELINE_LOD_MIN_SIZE', str( 16 * 1024 ** 2 ) ) )   # OBJ bytes; smaller meshes stay one tile
 PIPELINE_LOD_LEVELS = int( env( 'PIPELINE_LOD_LEVELS', '3' ) )
-PIPELINE_LOD_DIVISIONS = int( env( 'PIPELINE_LOD_DIVISIONS', '2' ) )
-PIPELINE_LOD_MAX_TEXTURE_SIZE = int( env( 'PIPELINE_LOD_MAX_TEXTURE_SIZE', '2048' ) )   # pixels per side of a tile's texture
+# with --octree each finer level splits once more: 1 gives 4, 16, 64 tiles for three levels. 2 (16, 64, 256) did not
+# finish in 23 min on the 94 MB Bellus mesh, where 1 takes 65 s
+PIPELINE_LOD_DIVISIONS = int( env( 'PIPELINE_LOD_DIVISIONS', '1' ) )
+PIPELINE_LOD_TIMEOUT = int( env( 'PIPELINE_LOD_TIMEOUT', '1800' ) )                     # seconds; then one tile instead
+# caps the whole source texture before it is cut into tiles; the finest level keeps up to this resolution in all
+PIPELINE_LOD_MAX_TEXTURE_SIZE = int( env( 'PIPELINE_LOD_MAX_TEXTURE_SIZE', '8192' ) )
 PIPELINE_LOD_TEXTURE_QUALITY = int( env( 'PIPELINE_LOD_TEXTURE_QUALITY', '75' ) )       # JPEG quality
 
 # Where a model without its own georeference is placed (longitude, latitude, height in metres).
