@@ -20,6 +20,7 @@ import os
 import platform
 import re
 import shutil
+import signal
 import subprocess
 import time
 from dataclasses import dataclass, field, fields
@@ -183,16 +184,13 @@ class Pipeline:
 		with open( self.work / 'commands.log', 'a' ) as out, open( err_path, 'w' ) as err:
 			out.write( '\n$ ' + ' '.join( args ) + '\n' ); out.flush()
 			try:
-				proc = subprocess.Popen( timer + args, cwd = self.work, stdout = out, stderr = err )
+				# a process group of its own: stopping /usr/bin/time alone would leave the tool running
+				proc = subprocess.Popen( timer + args, cwd = self.work, stdout = out, stderr = err, start_new_session = True )
 			except FileNotFoundError:
 				raise ReconstructionError( f'{tool} is not installed on this worker' ) from None
 			while proc.poll() is None:
 				if self.cancelled():
-					proc.terminate()
-					try:
-						proc.wait( 10 )
-					except subprocess.TimeoutExpired:
-						proc.kill()
+					_stop_group( proc )
 					raise Cancelled()
 				time.sleep( 1 )
 		text = err_path.read_text( errors = 'replace' )
@@ -467,6 +465,27 @@ class Pipeline:
 		self._cmd( [ self.tools.obj2tiles, '--y-up-to-z-up', '--lods', self.preset['lods'], '--divisions', 2, '--lat', lat, '--lon', lon,
 			'--alt', alt, self.paths['dense'] / 'model_zup.obj', tiles ], 'tiling' )
 		self.report[ 'tiles_mb' ] = disk_mb( tiles )
+
+
+def _stop_group( proc ):
+	"""Stop proc and everything it started: SIGTERM, then SIGKILL if the group is still there after 10 s."""
+	try:
+		os.killpg( proc.pid, signal.SIGTERM )
+	except ProcessLookupError:
+		return
+	deadline = time.monotonic() + 10
+	while time.monotonic() < deadline:
+		proc.poll()   # reaps the wrapper, so only live members keep the group
+		try:
+			os.killpg( proc.pid, 0 )
+		except ( ProcessLookupError, PermissionError ):   # macOS: EPERM once only zombies are left
+			return
+		time.sleep( 0.5 )
+	try:
+		os.killpg( proc.pid, signal.SIGKILL )
+	except ProcessLookupError:
+		pass
+	proc.wait()
 
 
 def disk_mb( path ):
