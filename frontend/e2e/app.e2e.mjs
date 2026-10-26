@@ -5,6 +5,8 @@
 //   CHROME_PATH    Chrome/Chromium binary (defaults for macOS and Linux)
 //   E2E_ARTIFACTS  folder for screenshots (default ./e2e-artifacts)
 //   EXPECT_TILE_HOST  when set, tiles must come from this host (e.g. the S3 bucket)
+//   E2E_RECON_PHOTOS  a folder of drone photos: reconstructs E2E_RECON_COUNT (default 8) of them with Preview, which
+//                     needs COLMAP and OpenMVS on the worker (scripts/e2e.sh sets it when they and the Aukerman set exist)
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -238,6 +240,57 @@ try {
 	await page.evaluate( () => [ ...document.querySelectorAll( '.model' ) ].find( m => m.textContent.includes( 'E2E cube' ) ).querySelector( 'button.danger' ).click() )
 	await page.waitForFunction( () => !document.body.textContent.includes( 'E2E cube' ), { timeout: 10000 } ).catch( () => {} )
 	check( 'model deleted from the list', ( await card() ) === '' )
+
+	// 12. reconstruction from photos: create, upload, start, cancel, try again (resumes), open in both viewers
+	const RECON = process.env.E2E_RECON_PHOTOS
+	if ( RECON ) {
+		const count = Number( process.env.E2E_RECON_COUNT ?? 8 )
+		const photos = fs.readdirSync( RECON ).filter( f => /\.jpe?g$/i.test( f ) ).sort().slice( 0, count ).map( f => path.join( RECON, f ) )
+		await page.goto( BASE + '/reconstruct', { waitUntil: 'networkidle0' } )
+		await page.type( 'input[maxlength="128"]', 'E2E reconstruction' )
+		await page.click( 'input[name=preset][value=preview]' )
+		await Promise.all( [ page.waitForFunction( () => /^\/reconstructions\/\d+$/.test( location.pathname ), { timeout: 15000 } ), page.click( 'button.primary' ) ] )
+		const reconId = Number( page.url().split( '/' ).pop() )
+		const photoInput = await page.$( 'input[type=file][multiple][accept^="image/jpeg"]' )
+		await photoInput.uploadFile( ...photos )
+		await page.waitForFunction( n => document.body.textContent.includes( `${n} uploaded ·` ), { timeout: 120000 }, photos.length ).catch( () => {} )
+		check( `reconstruction: ${photos.length} photos uploaded from the page`, ( await page.content() ).includes( `${photos.length} uploaded ·` ) )
+		await shot( '5-reconstruction-photos.png' )
+
+		await clickText( 'Start reconstruction' )
+		// cancel once two stages are done, so trying again has checkpoints to skip
+		await page.waitForFunction( () => document.querySelectorAll( '.stages li.done' ).length >= 2, { timeout: 300000 } )
+		await clickText( 'Cancel' )
+		await page.waitForFunction( () => document.querySelector( '[role=alert]' )?.textContent.includes( 'Cancelled.' ), { timeout: 60000 } ).catch( () => {} )
+		check( 'reconstruction: cancelled from the page', ( await textOf( '[role=alert]' ) ).includes( 'Cancelled.' ), await textOf( '[role=alert]' ) )
+		await clickText( 'Try again' )
+		await page.waitForFunction( () => [ ...document.querySelectorAll( 'a' ) ].some( a => a.textContent.trim() === 'Open in 3D viewer' )
+			|| document.querySelector( '.stages li.failed' ), { timeout: 900000 } ).catch( () => {} )
+		const jobs = await page.evaluate( async id => {
+			const recon = await ( await fetch( `/api/v1/reconstructions/${id}/` ) ).json()
+			const list = ( await ( await fetch( `/api/v1/jobs/?model=${recon.model}` ) ).json() ).results
+			return Promise.all( list.map( async j => ( await fetch( `/api/v1/jobs/${j.id}/` ) ).json() ) )
+		}, reconId )
+		const resumed = jobs.find( j => j.kind === 'reconstruction' && j.status === 'succeeded' )
+		check( 'reconstruction: trying again skips the finished stages', /features: done before, skipped/.test( resumed?.log ?? '' ),
+			jobs.map( j => `${j.kind} ${j.status} ${j.message}` ).join( '; ' ) )
+		await shot( '5-reconstruction-done.png' )
+		check( 'reconstruction: results panel shows how it went', ( await page.content() ).includes( 'Photos placed' ) )
+
+		await clickText( 'Open in 3D viewer', 'a' )
+		await page.waitForFunction( () => document.querySelector( '.toolbar' ) && !document.querySelector( '.loading' ), { timeout: 60000 } ).catch( () => {} )
+		check( 'reconstruction: opens in the model viewer', ( await textOf( '.title' ) ).includes( 'E2E reconstruction' ) && !( await page.$( '.overlay' ) ), await textOf( '.title' ) )
+		await shot( '5-reconstruction-model-viewer.png' )
+		await clickText( 'Map (GIS)' )
+		await page.waitForFunction( () => document.querySelector( '.cesium-viewer' ), { timeout: 30000 } ).catch( () => {} )
+		await sleep( 6000 )
+		check( 'reconstruction: opens on the map', !!( await page.$( '.cesium-viewer' ) ) )
+		await shot( '5-reconstruction-map.png' )
+		await page.evaluate( async id => fetch( `/api/v1/reconstructions/${id}/`, { method: 'DELETE',
+			headers: { 'X-CSRFToken': document.cookie.match( /csrftoken=([^;]+)/ )?.[1] ?? '' } } ), reconId )
+	} else {
+		console.log( 'SKIP reconstruction (set E2E_RECON_PHOTOS to a folder of drone photos; needs COLMAP and OpenMVS)' )
+	}
 
 	if ( process.env.EXPECT_TILE_HOST ) {
 		check( `tiles were loaded from ${process.env.EXPECT_TILE_HOST}`, tileHosts.size === 1 && tileHosts.has( process.env.EXPECT_TILE_HOST ), [ ...tileHosts ].join( ', ' ) )

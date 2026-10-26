@@ -74,7 +74,7 @@ api             → core              (finds each app's api.py; no app imports a
 3. `api.py` with its endpoints: creating a reconstruction makes a `Model3D`; `start` calls `start_job( model, 'reconstruction' )`.
 4. In `AppConfig.ready()`: `register_job_kind( 'reconstruction', run, queue = 'reconstruction' )`. `run` builds the mesh, saves it as `model.source_file` and calls `start_job( model, 'tiling', follow_up_of = job )`. From then on the model is tiled, listed, viewed, labelled and measured like any upload.
 5. Workers for the heavy part: `celery -A config worker -Q celery,reconstruction` on machines with the reconstruction software (and GPU); other workers serve only the default `celery` queue.
-6. Front end (M3): `frontend/src/reconstruction/` with its API file and pages, routes in `router.ts`, and a nav link in `App.vue`.
+6. Front end: `frontend/src/reconstruction/` with its API file and pages, routes in `router.ts`, and a nav link in `App.vue`.
 
 ## What uploads are accepted
 
@@ -104,6 +104,9 @@ up to `PIPELINE_MAX_RETRIES` times, waiting `PIPELINE_RETRY_BACKOFF` seconds and
 
 ## 3D reconstruction from photos
 
+In the app: **Reconstruct** in the top bar (`frontend/src/reconstruction/`) walks through it: name and quality, photos (dropped as
+files or a folder, uploaded four at a time; after a reload, choosing the same photos again uploads only the missing ones),
+optional camera inputs, then live progress, cancel and try again, and how it went. Behind it is
 `/api/v1/reconstructions/` (see the docstring of `reconstruction/api.py` and `/api/docs/`): create one with a name, preset
 (`preview`, `standard`, `high`) and what is known about the cameras, upload 3–1000 photos, optionally masks and a poses file,
 then `start`. The job runs COLMAP (features, matching, cameras) and OpenMVS (dense points, mesh, texture), then the tiling job
@@ -186,7 +189,8 @@ RAR uploads need an extraction tool on `PATH` that `rarfile` can use: `unrar`, `
 .venv/bin/python manage.py test                     # API, permissions, spatial search, pipeline with real converters, dependency rules,
                                                     # limits and retries, S3 storage (moto), 2019 data migrations both ways
 cd frontend && npm test && npm run typecheck        # measurement maths, tool clean-up, types
-scripts/e2e.sh                                      # browser test: sign up, upload, processing, every viewer tool, delete
+scripts/e2e.sh                                      # browser test: sign up, upload, processing, every viewer tool, delete;
+                                                    # plus a reconstruction of 8 photos where COLMAP and the Aukerman set exist
 ```
 
 `scripts/e2e.sh` creates its own database (`southcloud_e2e`), media folder and queue, starts a server and a Celery worker,
