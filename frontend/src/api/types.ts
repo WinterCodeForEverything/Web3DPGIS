@@ -19,6 +19,7 @@ export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed'
 export interface Job {
 	id: number
 	model: number
+	kind: string          // what the job does: tiling, reconstruction …
 	status: JobStatus
 	progress: number
 	attempts: number

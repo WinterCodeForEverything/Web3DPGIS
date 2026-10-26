@@ -69,6 +69,7 @@ onUnmounted( () => window.clearTimeout( poll ) )
 <template>
 	<div class="page" style="max-width: 640px">
 		<h1>Upload a model</h1>
+		<p class="muted">Have photos instead of a model? <RouterLink to="/reconstruct">Reconstruct it from photos</RouterLink>.</p>
 		<form class="card" @submit.prevent="submit">
 			<label class="field">File
 				<input type="file" :accept="ACCEPT" required @change="chooseFile( $event, 'file' )" />

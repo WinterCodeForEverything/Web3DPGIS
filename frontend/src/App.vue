@@ -21,6 +21,7 @@ async function logout() {
 			<nav class="nav">
 				<RouterLink to="/">Models</RouterLink>
 				<RouterLink v-if="auth.user" to="/upload">Upload</RouterLink>
+				<RouterLink v-if="auth.user" to="/reconstruct">Reconstruct</RouterLink>
 				<a href="/api/docs/" target="_blank" rel="noopener">API</a>
 			</nav>
 			<div class="account">

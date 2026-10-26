@@ -62,12 +62,13 @@ button:disabled { opacity: 0.5; cursor: default; }
 button.primary, .button.primary, .topbar .button { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 button.danger { color: var(--danger); }
 button.link { border: none; background: none; padding: 0; color: var(--accent); }
-button.small { padding: 3px 8px; font-size: 13px; }
+button.small, .button.small { padding: 3px 8px; font-size: 13px; }
 
 .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; border: 1px solid currentColor; }
 .badge.ready { color: var(--ok); }
 .badge.failed { color: var(--danger); }
 .badge.pending, .badge.processing { color: var(--warn); }
+.badge.draft { color: var(--muted); }
 
 .progress { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
 .progress > div { height: 100%; background: var(--accent); transition: width 0.2s; }
