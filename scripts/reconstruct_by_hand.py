@@ -242,6 +242,31 @@ def matrix_to_quat( R ):
 	return tuple( q )
 
 
+# rotations that turn the named axis into +Z (all proper rotations, so nothing is mirrored)
+UP_AXES = {
+	'+z': ( ( 1, 0, 0 ), ( 0, 1, 0 ), ( 0, 0, 1 ) ), '-z': ( ( 1, 0, 0 ), ( 0, -1, 0 ), ( 0, 0, -1 ) ),
+	'+y': ( ( 1, 0, 0 ), ( 0, 0, -1 ), ( 0, 1, 0 ) ), '-y': ( ( 1, 0, 0 ), ( 0, 0, 1 ), ( 0, -1, 0 ) ),
+	'+x': ( ( 0, 0, -1 ), ( 0, 1, 0 ), ( 1, 0, 0 ) ), '-x': ( ( 0, 0, 1 ), ( 0, 1, 0 ), ( -1, 0, 0 ) ),
+}
+
+
+def transform_obj( src, dst, scale, up ):
+	"""Copy an OBJ with its vertices scaled to metres and rotated so `up` becomes +Z; materials and texture
+	coordinates are untouched, so dst must sit next to the original's .mtl and texture."""
+	R = UP_AXES[ up ]
+	turn = lambda v: [ sum( R[r][c] * v[c] for c in range( 3 ) ) for r in range( 3 ) ]
+	with open( src ) as fin, open( dst, 'w' ) as fout:
+		for line in fin:
+			if line.startswith( 'v ' ):
+				x, y, z = turn( [ float( v ) * scale for v in line.split()[1:4] ] )
+				fout.write( f'v {x:.6f} {y:.6f} {z:.6f}\n' )
+			elif line.startswith( 'vn ' ):
+				x, y, z = turn( [ float( v ) for v in line.split()[1:4] ] )
+				fout.write( f'vn {x:.6f} {y:.6f} {z:.6f}\n' )
+			else:
+				fout.write( line )
+
+
 # --- running and measuring commands ------------------------------------------------
 
 def timed( cmd, log ):
@@ -264,6 +289,12 @@ def timed( cmd, log ):
 
 def disk_mb( path ):
 	return round( sum( f.stat().st_size for f in Path( path ).rglob( '*' ) if f.is_file() ) / 2 ** 20 )
+
+
+def model_points( colmap, model ):
+	text = subprocess.run( [ colmap, 'model_analyzer', '--path', model ], capture_output = True, text = True ).stderr
+	m = re.search( r'Points:\s*(\d+)', text )
+	return int( m.group( 1 ) ) if m else 0
 
 
 def model_stats( colmap, model ):
@@ -298,6 +329,10 @@ def main():
 	known.add_argument( '--full-resolution', action = 'store_true', help = 'extract features at full image size (small or distant objects)' )
 	known.add_argument( '--sift-threshold', type = float, help = 'SIFT peak threshold; lower finds more features in dark or low-contrast photos '
 		'(COLMAP default 0.00667, e.g. 0.0015)' )
+	known.add_argument( '--min-track', type = int, default = 2, help = 'keep only 3D points seen in at least this many photos '
+		'(3 removes most chance matches but can leave photos with no points)' )
+	known.add_argument( '--units-to-metres', type = float, default = 1.0, help = 'scale of the result to metres, e.g. 0.001 for poses in mm' )
+	known.add_argument( '--up-axis', choices = list( UP_AXES ), default = '+z', help = 'axis of the result that points up (camera frames: -y)' )
 	known.add_argument( '--up-method', choices = [ 'IMAGE-ORIENTATION', 'MANHATTAN-WORLD' ], default = 'IMAGE-ORIENTATION',
 		help = 'how "up" is found without GPS or poses: upright photos, or the lines of buildings' )
 	args = ap.parse_args()
@@ -451,16 +486,41 @@ def main():
 		return timed( [ colmap, 'model_aligner', '--input_path', report['sparse_model'], '--output_path', aligned,
 			'--ref_images_path', reference, '--ref_is_gps', '0', '--alignment_type', 'custom',
 			'--alignment_max_error', 3 * max( report['prior_std'] ) ], log )
-	stage( 'georeference', georeference )
+	def georeference_and_filter():
+		seconds, mb = georeference()
+		if args.min_track > 2:
+			# drop points seen in fewer photos: a chance match rarely agrees with a third photo
+			filtered = work / 'aligned_filtered'
+			filtered.mkdir( exist_ok = True )
+			s2, _ = timed( [ colmap, 'point_filtering', '--input_path', aligned, '--output_path', filtered, '--min_track_len', args.min_track ], log )
+			shutil.rmtree( aligned ); filtered.rename( aligned )
+			seconds += s2
+		report[ 'points' ] = model_points( colmap, aligned )
+		return seconds, mb
+	stage( 'georeference', georeference_and_filter )
 	stage( 'undistort', [ colmap, 'image_undistorter', '--image_path', images, '--input_path', aligned,
 		'--output_path', dense, '--output_type', 'COLMAP', '--max_image_size', preset['max_image_size'] ] )
 
 	# 3. OpenMVS
 	scene = dense / 'scene.mvs'
+	def openmvs_masks():
+		"""The --masks for OpenMVS: <photo stem>.mask.png at the undistorted photos' size (background = 0, ignored)."""
+		from PIL import Image
+		start = time.monotonic()
+		folder = dense / 'masks'; folder.mkdir( exist_ok = True )
+		for photo in ( dense / 'images' ).iterdir():
+			mask = args.masks / f'{photo.name}.png'
+			if mask.exists():
+				with Image.open( photo ) as img:
+					size = img.size
+				Image.open( mask ).convert( 'L' ).resize( size ).point( lambda v: 255 if v else 0 ).save( folder / f'{photo.stem}.mask.png' )
+		return time.monotonic() - start, None
+	mask_options = [ '--mask-path', dense / 'masks', '--ignore-mask-label', 0 ] if args.masks else []
 	stage( 'densify',
+		*( [ openmvs_masks ] if args.masks else [] ),
 		[ mvs( 'InterfaceCOLMAP' ), '-i', dense, '-o', scene, '--image-folder', dense / 'images' ],
 		[ mvs( 'DensifyPointCloud' ), '-i', scene, '-w', dense, '--resolution-level', preset['densify_level'],
-			'--max-resolution', preset['max_image_size'] ] )
+			'--max-resolution', preset['max_image_size'], *mask_options ] )
 	mesh_cmds = [ [ mvs( 'ReconstructMesh' ), '-i', dense / 'scene_dense.mvs', '-w', dense, '--decimate', preset['mesh_decimate'] ] ]
 	if preset['refine']:
 		mesh_cmds.append( [ mvs( 'RefineMesh' ), '-i', dense / 'scene_dense.mvs', '-m', dense / 'scene_dense_mesh.ply', '-w', dense,
@@ -478,9 +538,19 @@ def main():
 		lon, lat, alt = ( float( v ) for v in args.placement.split( ',' ) ) if args.placement else ( 0.0, 0.0, 0.0 )
 		if not args.placement:
 			print( 'note: no GPS and no --placement; the tiles are placed at longitude 0, latitude 0' )
+	final_obj = dense / 'model.obj'
+	def to_metres_and_up():
+		start = time.monotonic()
+		transform_obj( dense / 'model.obj', dense / 'model_final.obj', args.units_to_metres, args.up_axis )
+		return time.monotonic() - start, None
+	tiling_steps = []
+	if args.units_to_metres != 1.0 or args.up_axis != '+z':
+		final_obj = dense / 'model_final.obj'
+		tiling_steps.append( to_metres_and_up )
 	# OpenMVS writes a Z-up OBJ (east, north, up); Obj2Tiles assumes Y-up unless told, and the model would stand on its edge
-	stage( 'tiling', [ obj2tiles, '--y-up-to-z-up', '--lods', preset['lods'], '--divisions', 2, '--lat', lat, '--lon', lon, '--alt', alt,
-		dense / 'model.obj', tiles ] )
+	tiling_steps.append( [ obj2tiles, '--y-up-to-z-up', '--lods', preset['lods'], '--divisions', 2, '--lat', lat, '--lon', lon, '--alt', alt,
+		final_obj, tiles ] )
+	stage( 'tiling', *tiling_steps )
 
 	report[ 'total_seconds' ] = round( sum( s['seconds'] for s in report['stages'].values() ), 1 )
 	report[ 'tiles_mb' ] = disk_mb( tiles ) if tiles.exists() else None
