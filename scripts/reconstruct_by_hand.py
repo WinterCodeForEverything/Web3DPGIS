@@ -160,6 +160,88 @@ def write_known_model( db, poses, folder ):
 	con.close()
 
 
+def normalized( model, params, uv ):
+	"""Pixel positions to undistorted normalized image coordinates (rows of x, y, 1) for COLMAP camera models 0–4."""
+	import numpy as np
+	if model in ( 0, 2, 3 ):        # SIMPLE_PINHOLE, SIMPLE_RADIAL, RADIAL: f, cx, cy, [k1, [k2]]
+		fx = fy = params[0]; cx, cy = params[1:3]; k1, k2, p1, p2 = ( list( params[3:] ) + [ 0, 0, 0, 0 ] )[:2] + [ 0, 0 ]
+	elif model in ( 1, 4 ):         # PINHOLE, OPENCV: fx, fy, cx, cy, [k1, k2, p1, p2]
+		fx, fy, cx, cy = params[:4]; k1, k2, p1, p2 = ( list( params[4:] ) + [ 0, 0, 0, 0 ] )[:4]
+	else:
+		sys.exit( f'camera model {model} is not supported for pose-guided matching' )
+	x = ( uv[:, 0] - cx ) / fx; y = ( uv[:, 1] - cy ) / fy; xu, yu = x.copy(), y.copy()
+	for _ in range( 10 ):           # fixed-point removal of the distortion
+		r2 = xu * xu + yu * yu; radial = 1 + k1 * r2 + k2 * r2 * r2
+		xu = ( x - ( 2 * p1 * xu * yu + p2 * ( r2 + 2 * xu * xu ) ) ) / radial
+		yu = ( y - ( p1 * ( r2 + 2 * yu * yu ) + 2 * p2 * xu * yu ) ) / radial
+	return np.stack( [ xu, yu, np.ones_like( xu ) ], 1 ), fx
+
+
+def match_with_known_poses( db, poses, max_error_px = 4.0, max_angle = 75.0, ratio = 0.8, min_matches = 15 ):
+	"""Epipolar-guided matching: for each feature, only features near its epipolar line in the other photo (from the
+	known poses) are candidates; the best descriptor match among them is kept if it passes a ratio test and a mutual
+	check. Replaces COLMAP's photo-based verified matches, which accept chance matches on smooth or symmetric objects.
+	Returns ( pairs kept, matches kept )."""
+	import numpy as np
+	con = sqlite3.connect( db )
+	cams = { cid: ( model, struct.unpack( f'{len( p ) // 8}d', p ) ) for cid, model, p in con.execute( 'select camera_id, model, params from cameras' ) }
+	images = { iid: ( name, cid ) for iid, name, cid in con.execute( 'select image_id, name, camera_id from images' ) if name in poses }
+	kp = { iid: np.frombuffer( d, np.float32 ).reshape( r, c )[:, :2].astype( float ) for iid, r, c, d in con.execute( 'select image_id, rows, cols, data from keypoints' ) if iid in images }
+	desc = { iid: np.frombuffer( d, np.uint8 ).reshape( r, c ).astype( np.float32 ) for iid, r, c, d in con.execute( 'select image_id, rows, cols, data from descriptors' ) if iid in images }
+	norm = { iid: normalized( *cams[ images[ iid ][1] ], kp[ iid ] ) for iid in images }
+	w2c = {}
+	for iid, ( name, _ ) in images.items():
+		q, t = poses[ name ]
+		w2c[ iid ] = ( np.array( quat_to_matrix( *q ) ), np.array( t ) )
+	skew = lambda v: np.array( [ [ 0, -v[2], v[1] ], [ v[2], 0, -v[0] ], [ -v[1], v[0], 0 ] ] )
+	con.execute( 'delete from two_view_geometries' )
+	con.execute( 'delete from matches' )
+	pairs_kept = matches_kept = 0
+	ids = sorted( images )
+	for a_index, i1 in enumerate( ids ):
+		for i2 in ids[ a_index + 1: ]:
+			( R1, t1 ), ( R2, t2 ) = w2c[ i1 ], w2c[ i2 ]
+			R = R2 @ R1.T; t = t2 - R @ t1
+			if np.degrees( np.arccos( np.clip( ( np.trace( R ) - 1 ) / 2, -1, 1 ) ) ) > max_angle:
+				continue                    # the photos see different sides of the object
+			E = skew( t ) @ R
+			( x1, f1 ), ( x2, f2 ) = norm[ i1 ], norm[ i2 ]
+			lines = x1 @ E.T
+			epi = np.abs( lines @ x2.T ) / np.linalg.norm( lines[:, :2], axis = 1, keepdims = True ) * f2   # pixels in photo 2
+			d1, d2 = desc[ i1 ], desc[ i2 ]
+			dist = np.sqrt( np.maximum( ( d1 * d1 ).sum( 1 )[:, None] + ( d2 * d2 ).sum( 1 )[None, :] - 2 * d1 @ d2.T, 0 ) )
+			dist[ epi > max_error_px ] = np.inf
+			best12 = np.argmin( dist, 1 ); best21 = np.argmin( dist, 0 )
+			order = np.sort( dist, 1 )
+			ok = np.isfinite( order[:, 0] ) & ( ( order[:, 0] < ratio * order[:, 1] ) | ~np.isfinite( order[:, 1] ) )
+			ok &= best21[ best12 ] == np.arange( len( best12 ) )                          # mutual best
+			m = np.stack( [ np.nonzero( ok )[0], best12[ ok ] ], 1 ).astype( np.uint32 )
+			if len( m ) < min_matches:
+				continue
+			pair_id = i1 * 2147483647 + i2
+			q = matrix_to_quat( R )
+			con.execute( 'insert into matches values ( ?, ?, 2, ? )', ( pair_id, len( m ), m.tobytes() ) )
+			con.execute( 'insert into two_view_geometries ( pair_id, rows, cols, data, config, F, E, H, qvec, tvec ) values ( ?, ?, 2, ?, 2, ?, ?, ?, ?, ? )',
+				( pair_id, len( m ), m.tobytes(), np.eye( 3 ).tobytes(), E.astype( np.float64 ).tobytes(), np.eye( 3 ).tobytes(),
+				np.array( q, np.float64 ).tobytes(), t.astype( np.float64 ).tobytes() ) )
+			pairs_kept += 1; matches_kept += len( m )
+	con.commit(); con.close()
+	return pairs_kept, matches_kept
+
+
+def matrix_to_quat( R ):
+	"""Rotation matrix to ( qw, qx, qy, qz )."""
+	t = R[0][0] + R[1][1] + R[2][2]
+	if t > 0:
+		s = math.sqrt( t + 1 ) * 2
+		return ( s / 4, ( R[2][1] - R[1][2] ) / s, ( R[0][2] - R[2][0] ) / s, ( R[1][0] - R[0][1] ) / s )
+	i = max( range( 3 ), key = lambda k: R[k][k] ); j, k = ( i + 1 ) % 3, ( i + 2 ) % 3
+	s = math.sqrt( 1 + R[i][i] - R[j][j] - R[k][k] ) * 2
+	q = [ 0.0, 0.0, 0.0, 0.0 ]
+	q[0] = ( R[k][j] - R[j][k] ) / s; q[ i + 1 ] = s / 4; q[ j + 1 ] = ( R[j][i] + R[i][j] ) / s; q[ k + 1 ] = ( R[k][i] + R[i][k] ) / s
+	return tuple( q )
+
+
 # --- running and measuring commands ------------------------------------------------
 
 def timed( cmd, log ):
@@ -200,6 +282,8 @@ def main():
 	ap.add_argument( '--work', required = True, type = Path )
 	ap.add_argument( '--tools', required = True, type = Path )
 	ap.add_argument( '--use-gpu', action = 'store_true', help = 'COLMAP on the GPU (needs a CUDA build)' )
+	ap.add_argument( '--stop-after', choices = [ 'prepare', 'features', 'matching', 'sparse', 'georeference', 'undistort', 'densify', 'mesh', 'texture' ],
+		help = 'stop after this stage, e.g. georeference to test only how the cameras are solved' )
 	known = ap.add_argument_group( 'what is known about the cameras' )
 	known.add_argument( '--camera-model', default = 'SIMPLE_RADIAL', help = 'COLMAP camera model, e.g. SIMPLE_RADIAL, OPENCV, RADIAL' )
 	known.add_argument( '--camera-params', help = 'known intrinsics for that model, comma-separated (e.g. f,cx,cy,k)' )
@@ -209,6 +293,11 @@ def main():
 	known.add_argument( '--gps-std', default = '3,5', help = 'GPS uncertainty in metres, horizontal,vertical (default 3,5)' )
 	known.add_argument( '--ignore-gps', action = 'store_true', help = 'do not use GPS from the photos' )
 	known.add_argument( '--placement', help = 'longitude,latitude,height for a model without GPS (default 0,0,0)' )
+	known.add_argument( '--masks', type = Path, help = 'folder of masks, <photo name>.png; black areas get no features '
+		'(e.g. a static background on a turntable)' )
+	known.add_argument( '--full-resolution', action = 'store_true', help = 'extract features at full image size (small or distant objects)' )
+	known.add_argument( '--sift-threshold', type = float, help = 'SIFT peak threshold; lower finds more features in dark or low-contrast photos '
+		'(COLMAP default 0.00667, e.g. 0.0015)' )
 	known.add_argument( '--up-method', choices = [ 'IMAGE-ORIENTATION', 'MANHATTAN-WORLD' ], default = 'IMAGE-ORIENTATION',
 		help = 'how "up" is found without GPS or poses: upright photos, or the lines of buildings' )
 	args = ap.parse_args()
@@ -246,6 +335,9 @@ def main():
 		report_path.write_text( json.dumps( report, indent = 2 ) )
 		marker.touch()
 		print( f'{name}: {total:.0f} s, peak {peak} MB', flush = True )
+		if name == args.stop_after:
+			print( json.dumps( { k: v for k, v in report.items() if k != 'stages' }, indent = 2 ) )
+			sys.exit( 0 )
 
 	# 1. photos
 	def prepare():
@@ -293,8 +385,19 @@ def main():
 	stage( 'features', [ colmap, 'feature_extractor', '--database_path', db, '--image_path', images,
 		'--ImageReader.camera_model', args.camera_model, '--ImageReader.single_camera', '1',
 		*( [ '--ImageReader.camera_params', args.camera_params ] if args.camera_params else [] ),
-		'--FeatureExtraction.use_gpu', gpu, '--FeatureExtraction.max_image_size', preset['max_image_size'] ], priors )
-	stage( 'matching', [ colmap, 'exhaustive_matcher', '--database_path', db, '--FeatureMatching.use_gpu', gpu ] )
+		*( [ '--ImageReader.mask_path', args.masks.resolve() ] if args.masks else [] ),
+		'--FeatureExtraction.use_gpu', gpu, '--FeatureExtraction.max_image_size', -1 if args.full_resolution else preset['max_image_size'],
+		*( [ '--SiftExtraction.peak_threshold', args.sift_threshold, '--SiftExtraction.domain_size_pooling', 1 ] if args.sift_threshold else [] ) ], priors )
+	def guided_matching():
+		start = time.monotonic()
+		poses = { n: tuple( v ) for n, v in json.loads( ( work / 'known_poses.json' ).read_text() ).items() }
+		report[ 'matched_pairs' ], report[ 'matches' ] = match_with_known_poses( db, poses )
+		return time.monotonic() - start, None
+	if report.get( 'mode' ) == 'full poses':
+		# the poses say where each match must lie, so they guide the matching instead of the photos verifying it
+		stage( 'matching', guided_matching )
+	else:
+		stage( 'matching', [ colmap, 'exhaustive_matcher', '--database_path', db, '--FeatureMatching.use_gpu', gpu ] )
 
 	def best_model():
 		models = sorted( ( model_stats( colmap, m ), m ) for m in sparse.iterdir() if ( m / 'images.bin' ).exists() )
