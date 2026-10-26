@@ -24,11 +24,9 @@ def _mask_path( instance, filename ):
 class Reconstruction( models.Model ):
 	"""Photos turned into a 3D model: the model is created up front and gets its tiles once the job is done."""
 
-	Preset = models.TextChoices( 'Preset', [ ( p, p.capitalize() ) for p in PRESETS ] )
-
 	# by label, so the catalog app does not need to know about reconstructions
 	model = models.OneToOneField( 'modelshow.Model3D', related_name = 'reconstruction', on_delete = models.CASCADE )
-	preset = models.CharField( max_length = 16, choices = Preset.choices, default = 'standard' )
+	preset = models.CharField( max_length = 16, choices = [ ( p, p.capitalize() ) for p in PRESETS ], default = 'standard' )
 	options = models.JSONField( default = dict, blank = True, help_text = 'What is known about the cameras; see stages.Options' )
 	poses = models.FileField( upload_to = _poses_path, max_length = 255, blank = True,
 		help_text = 'Camera centres ("name x y z") or full poses ("name qw qx qy qz tx ty tz") in a local system' )

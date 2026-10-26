@@ -276,19 +276,19 @@ class ExtensionPointTests( PipelineTestBase ):
 	"""How another module plugs in: its own job kind that hands over to tiling, and new input formats."""
 
 	def test_a_new_job_kind_can_hand_its_result_to_tiling( self ):
-		# e.g. reconstruction: the job produces a mesh as the model's source, then the tiling job publishes it
+		# like reconstruction (registered under its own name): the job produces a mesh as the model's source, then the tiling job publishes it
 		def reconstruct( job, report ):
 			report.step( 'reconstructing', 50 )
 			job.model.source_file.save( 'reconstructed.glb', ContentFile( test_fixtures.glb_triangle() ), save = True )
 			jobs.start_job( job.model, 'tiling', follow_up_of = job )
 
 		with mock.patch.dict( jobs._kinds ), mock.patch.object( tasks.process_job, 'apply_async', wraps = tasks.process_job.apply_async ) as queued:
-			jobs.register_job_kind( 'reconstruction', reconstruct, queue = 'gpu' )
+			jobs.register_job_kind( 'photo-mesh', reconstruct, queue = 'gpu' )
 			model = Model3D.objects.create( name = 'photos', owner = self.user, source_file = 'package/photos.zip' )
 			with self.captureOnCommitCallbacks( execute = True ):
-				jobs.start_job( model, 'reconstruction' )
+				jobs.start_job( model, 'photo-mesh' )
 		model.refresh_from_db()
-		self.assertEqual( [ ( j.kind, j.status ) for j in model.jobs.order_by( 'id' ) ], [ ( 'reconstruction', 'succeeded' ), ( 'tiling', 'succeeded' ) ] )
+		self.assertEqual( [ ( j.kind, j.status ) for j in model.jobs.order_by( 'id' ) ], [ ( 'photo-mesh', 'succeeded' ), ( 'tiling', 'succeeded' ) ] )
 		self.assertEqual( model.status, 'ready' )
 		self.assertEqual( [ c.kwargs['queue'] for c in queued.call_args_list ], [ 'gpu', 'celery' ] )
 
