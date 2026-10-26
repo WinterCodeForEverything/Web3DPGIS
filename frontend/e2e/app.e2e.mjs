@@ -251,7 +251,8 @@ try {
 		await page.click( 'input[name=preset][value=preview]' )
 		await Promise.all( [ page.waitForFunction( () => /^\/reconstructions\/\d+$/.test( location.pathname ), { timeout: 15000 } ), page.click( 'button.primary' ) ] )
 		const reconId = Number( page.url().split( '/' ).pop() )
-		const photoInput = await page.$( 'input[type=file][multiple][accept^="image/jpeg"]' )
+		// the page loads the server's limits and the reconstruction before it shows the photo picker
+		const photoInput = await page.waitForSelector( 'input[type=file][multiple][accept^="image/jpeg"]', { timeout: 15000 } )
 		await photoInput.uploadFile( ...photos )
 		await page.waitForFunction( n => document.body.textContent.includes( `${n} uploaded ·` ), { timeout: 120000 }, photos.length ).catch( () => {} )
 		check( `reconstruction: ${photos.length} photos uploaded from the page`, ( await page.content() ).includes( `${photos.length} uploaded ·` ) )
@@ -264,6 +265,8 @@ try {
 		await page.waitForFunction( () => document.querySelector( '[role=alert]' )?.textContent.includes( 'Cancelled.' ), { timeout: 60000 } ).catch( () => {} )
 		check( 'reconstruction: cancelled from the page', ( await textOf( '[role=alert]' ) ).includes( 'Cancelled.' ), await textOf( '[role=alert]' ) )
 		await clickText( 'Try again' )
+		// the cancelled job shows as failed until the page has loaded the new one
+		await page.waitForFunction( () => !document.querySelector( '.stages li.failed' ), { timeout: 15000 } )
 		await page.waitForFunction( () => [ ...document.querySelectorAll( 'a' ) ].some( a => a.textContent.trim() === 'Open in 3D viewer' )
 			|| document.querySelector( '.stages li.failed' ), { timeout: 900000 } ).catch( () => {} )
 		const jobs = await page.evaluate( async id => {

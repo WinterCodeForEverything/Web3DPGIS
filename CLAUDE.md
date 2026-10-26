@@ -15,7 +15,7 @@ Guidance for Claude Code when working in this repository.
    | --- | --- | --- |
    | Front-end type check and unit tests | `cd frontend && npx vue-tsc --noEmit && npx vitest run` | 1 min |
    | Back-end tests | `.venv/bin/python manage.py test` (with `.env` loaded) | 1 min |
-   | Browser end-to-end test | `scripts/e2e.sh` | 3–5 min |
+   | Browser end-to-end test | `scripts/e2e.sh` (with the 8-photo reconstruction where COLMAP is installed) | 6–10 min |
    | Reconstruction benchmark, 10 photos | `scripts/reconstruct_by_hand.py --count 10 …` | 2 min |
    | Reconstruction benchmark, 50 photos | `scripts/reconstruct_by_hand.py --count 50 …` | 25–35 min |
    | Reconstruction benchmark, 100 photos | `scripts/reconstruct_by_hand.py --count 100 …` | 40–75 min, can exceed 1 hour |
