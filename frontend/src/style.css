@@ -128,7 +128,8 @@ button.small, .button.small { padding: 3px 8px; font-size: 13px; }
 .model-page .cesium-viewer-toolbar .cesium-button:hover, .model-page .cesium-viewer-fullscreenContainer .cesium-button:hover { background: var(--ds-primary); box-shadow: none; }
 .model-page .cesium-viewer-fullscreenContainer { right: 12px; bottom: 30px; width: 36px; height: 36px; }
 .model-page .cesium-viewer-fullscreenContainer .cesium-button { margin: 0; }
-.model-page .cesium-button svg { width: 24px; height: 24px; }
+/* Cesium positions its icons absolutely at the top left, ignoring padding */
+.model-page .cesium-button svg { position: absolute; top: 6px; left: 6px; width: 24px; height: 24px; }
 
 table.data { width: 100%; border-collapse: collapse; font-size: 14px; }
 table.data td, table.data th { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }
