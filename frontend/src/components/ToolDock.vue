@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { Model3D } from '@/api/types'
 import { availableTools, type ToolDefinition } from '@/tools'
+import IconButton from './IconButton.vue'
 
 // The toolbar and the open tool's panel, the same in every viewer. Only one tool is open at a time;
 // switching unmounts the previous panel, which then removes its handlers and drawings.
@@ -22,9 +23,7 @@ function toggle( id: string ) {
 			<slot />
 			<hr />
 		</template>
-		<button v-for="t in shown" :key="t.id" :class="{ on: active === t.id }" :aria-pressed="active === t.id" @click="toggle( t.id )">
-			{{ t.title }}
-		</button>
+		<IconButton v-for="t in shown" :key="t.id" :icon="t.icon" :label="t.title" :on="active === t.id" @click="toggle( t.id )" />
 	</aside>
 
 	<section v-if="open" class="panel" :aria-label="open.title">
@@ -38,11 +37,10 @@ function toggle( id: string ) {
 </template>
 
 <style scoped>
-/* one frosted card of compact utility buttons; the viewer's own options sit above a hairline, the tools below */
-.toolbar { position: absolute; top: 12px; left: 12px; width: 124px; display: flex; flex-direction: column; gap: 2px; padding: 6px; z-index: 2;
+/* one frosted column of icon buttons; the viewer's own options sit above a hairline, the tools below */
+.toolbar { position: absolute; top: 12px; left: 12px; display: flex; flex-direction: column; gap: 2px; padding: 6px; z-index: 3; /* above the panel, so the names show over it */
 	border-radius: var(--ds-rounded-lg); }
-.toolbar :deep( button ) { width: 100%; justify-content: flex-start; padding: 8px 12px; border-radius: var(--ds-rounded-sm); }
-.toolbar hr { width: calc(100% - 16px); margin: 4px auto; border: none; border-top: 1px solid rgba(255, 255, 255, 0.16); }
-.panel { position: absolute; top: 12px; left: 148px; width: 320px; max-height: calc(100% - 24px); overflow: auto; z-index: 2;
+.toolbar hr { width: 28px; margin: 4px auto; border: none; border-top: 1px solid rgba(255, 255, 255, 0.16); }
+.panel { position: absolute; top: 12px; left: 80px; width: 320px; max-height: calc(100% - 24px); overflow: auto; z-index: 2;
 	background: var(--panel); border: 1px solid var(--ds-hairline); border-radius: var(--ds-rounded-lg); padding: 17px; display: flex; flex-direction: column; gap: 10px; }
 </style>
