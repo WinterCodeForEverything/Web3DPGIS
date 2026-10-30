@@ -17,8 +17,11 @@ function toggle( id: string ) {
 </script>
 
 <template>
-	<aside class="toolbar" :aria-label="label ?? 'Tools'">
-		<slot />
+	<aside class="toolbar frost" :aria-label="label ?? 'Tools'">
+		<template v-if="$slots.default">
+			<slot />
+			<hr />
+		</template>
 		<button v-for="t in shown" :key="t.id" :class="{ on: active === t.id }" :aria-pressed="active === t.id" @click="toggle( t.id )">
 			{{ t.title }}
 		</button>
@@ -28,16 +31,18 @@ function toggle( id: string ) {
 		<header class="row">
 			<h2 style="margin: 0">{{ open.title }}</h2>
 			<span class="spacer" />
-			<button class="link" aria-label="Close tool" @click="active = null">✕</button>
+			<button class="icon-circle" aria-label="Close tool" @click="active = null">✕</button>
 		</header>
 		<component :is="open.component" :key="open.id" />
 	</section>
 </template>
 
 <style scoped>
-.toolbar { position: absolute; top: 12px; left: 12px; display: flex; flex-direction: column; gap: 6px; z-index: 2; }
-.toolbar :deep( button ) { min-width: 96px; justify-content: center; background: rgba(27, 31, 39, 0.85); color: #fff; border-color: transparent; }
-.toolbar :deep( button.on ) { background: var(--accent); }
-.panel { position: absolute; top: 12px; left: 124px; width: 320px; max-height: calc(100% - 24px); overflow: auto; z-index: 2;
-	background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+/* one frosted card of compact utility buttons; the viewer's own options sit above a hairline, the tools below */
+.toolbar { position: absolute; top: 12px; left: 12px; width: 124px; display: flex; flex-direction: column; gap: 2px; padding: 6px; z-index: 2;
+	border-radius: var(--ds-rounded-lg); }
+.toolbar :deep( button ) { width: 100%; justify-content: flex-start; padding: 8px 12px; border-radius: var(--ds-rounded-sm); }
+.toolbar hr { width: calc(100% - 16px); margin: 4px auto; border: none; border-top: 1px solid rgba(255, 255, 255, 0.16); }
+.panel { position: absolute; top: 12px; left: 148px; width: 320px; max-height: calc(100% - 24px); overflow: auto; z-index: 2;
+	background: var(--panel); border: 1px solid var(--ds-hairline); border-radius: var(--ds-rounded-lg); padding: 17px; display: flex; flex-direction: column; gap: 10px; }
 </style>

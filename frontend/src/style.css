@@ -10,6 +10,21 @@
 	--ok: #1e8e3e;
 	--warn: #b7791f;
 	--radius: 8px;
+	/* DESIGN.md tokens, used by the viewer controls */
+	--ds-primary: #0066cc;
+	--ds-primary-focus: #0071e3;
+	--ds-ink: #1d1d1f;
+	--ds-ink-muted-80: #333333;
+	--ds-pearl: #fafafc;
+	--ds-divider-soft: rgba(0, 0, 0, 0.04);
+	--ds-hairline: rgba(0, 0, 0, 0.08);
+	--ds-chip: rgba(210, 210, 215, 0.64);
+	--ds-frost: rgba(29, 29, 31, 0.72);
+	--ds-frost-filter: saturate(180%) blur(20px);
+	--ds-rounded-sm: 8px;
+	--ds-rounded-md: 11px;
+	--ds-rounded-lg: 18px;
+	--ds-pill: 9999px;
 	font-family: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 	color: var(--text);
 	background: var(--bg);
@@ -23,6 +38,12 @@
 		--muted: #98a2b3;
 		--border: #2f3542;
 		--accent: #4f8bff;
+		--ds-ink: #f5f5f7;
+		--ds-ink-muted-80: #e6e8ec;
+		--ds-pearl: #2a2a2c;
+		--ds-divider-soft: rgba(255, 255, 255, 0.06);
+		--ds-hairline: rgba(255, 255, 255, 0.12);
+		--ds-chip: rgba(118, 118, 128, 0.36);
 	}
 }
 
@@ -72,6 +93,42 @@ button.small, .button.small { padding: 3px 8px; font-size: 13px; }
 
 .progress { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
 .progress > div { height: 100%; background: var(--accent); transition: width 0.2s; }
+
+/* Viewer controls (both viewers), after DESIGN.md: frosted dark chrome floats over the scene, Action Blue marks what is on,
+   pills for actions, scale(0.95) on press, a 2px Focus Blue ring for the keyboard, no shadows. */
+.model-page button { font-size: 14px; letter-spacing: -0.224px; line-height: 1.29; transition: transform 0.12s ease, background-color 0.15s ease; }
+.model-page button:active:not(:disabled) { transform: scale(0.95); }
+.model-page button:focus-visible { outline: 2px solid var(--ds-primary-focus); outline-offset: 2px; }
+
+/* frosted chrome over the scene: the viewer switcher and the tool dock */
+.frost { background: var(--ds-frost); -webkit-backdrop-filter: var(--ds-frost-filter); backdrop-filter: var(--ds-frost-filter); color: #fff; }
+.frost button { background: transparent; border: none; color: #fff; }
+.frost button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); }
+.frost button.on, .frost button.on:hover { background: var(--ds-primary); color: #fff; }
+
+/* buttons inside panels and popups: pearl capsules, blue pills for the main action */
+.model-page .panel button, .model-page .popup button { border-radius: var(--ds-pill); padding: 7px 16px; background: var(--ds-pearl); color: var(--ds-ink-muted-80);
+	border: 1px solid var(--ds-hairline); }
+.model-page .panel button.small, .model-page .popup button.small { padding: 5px 14px; font-size: 13px; }
+.model-page .panel button:hover:not(:disabled), .model-page .popup button:hover:not(:disabled) { border-color: var(--ds-primary); }
+.model-page .panel button.primary, .model-page .popup button.primary { background: var(--ds-primary); border-color: var(--ds-primary); color: #fff; }
+.model-page .panel button.danger, .model-page .popup button.danger { color: var(--danger); }
+.model-page .panel button.danger:hover:not(:disabled), .model-page .popup button.danger:hover:not(:disabled) { border-color: var(--danger); }
+.model-page .panel button.link, .model-page .popup button.link { background: none; border: none; padding: 0; color: var(--ds-primary); }
+/* circular icon button (close ✕): translucent chip */
+.model-page button.icon-circle { width: 28px; height: 28px; padding: 0; justify-content: center; border: none; border-radius: 50%;
+	background: var(--ds-chip); color: var(--ds-ink); font-size: 12px; }
+.model-page button.icon-circle:hover:not(:disabled) { background: var(--ds-chip); border: none; filter: brightness(0.94); }
+
+/* Cesium's own widget buttons (full screen, navigation help) as circular frosted chips */
+.model-page .cesium-viewer-toolbar { top: 12px; right: 12px; }
+.model-page .cesium-viewer-toolbar .cesium-button, .model-page .cesium-viewer-fullscreenContainer .cesium-button {
+	width: 36px; height: 36px; margin: 0 0 0 8px; padding: 6px; border: none; border-radius: 50%; box-shadow: none;
+	background: var(--ds-frost); -webkit-backdrop-filter: var(--ds-frost-filter); backdrop-filter: var(--ds-frost-filter); color: #fff; fill: #fff; }
+.model-page .cesium-viewer-toolbar .cesium-button:hover, .model-page .cesium-viewer-fullscreenContainer .cesium-button:hover { background: var(--ds-primary); box-shadow: none; }
+.model-page .cesium-viewer-fullscreenContainer { right: 12px; bottom: 30px; width: 36px; height: 36px; }
+.model-page .cesium-viewer-fullscreenContainer .cesium-button { margin: 0; }
+.model-page .cesium-button svg { width: 24px; height: 24px; }
 
 table.data { width: 100%; border-collapse: collapse; font-size: 14px; }
 table.data td, table.data th { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }
