@@ -226,7 +226,7 @@ try {
 	// 9. analysis tools
 	await clickText( 'Sight line' )
 	await canvasClick( -60, 40 ); await canvasClick( 60, -20 )
-	check( 'sight line result', /Visible|Blocked/.test( await textOf( '.results' ) ), await textOf( '.results' ) )
+	check( 'sight line result', /Visible|Blocked/.test( await textOf( '.list' ) ), await textOf( '.list' ) )
 	await clickText( 'Viewshed' )
 	await page.$eval( '.panel input[type=number][min="8"]', el => { el.value = '12'; el.dispatchEvent( new Event( 'input' ) ) } )
 	await canvasClick( -80, 60 ); await canvasClick( 40, -30 )

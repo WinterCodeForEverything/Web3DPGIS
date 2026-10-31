@@ -115,7 +115,10 @@ watch( mode, async m => {
 	try {
 		const saved = ( await measurementsApi.measurements( host.model.value!.id, modeInfo( m ).kind ) ).results
 		if ( destroyed || load !== loadCount ) return
-		entries.value = saved.map( s => drawEntry( m, s.points.map( p => geodeticToEcef( p.longitude, p.latitude, p.height ) ), s ) )
+		// measurements taken while this loaded stay first in the list; skip any of them the server already returned
+		const known = new Set( entries.value.map( e => e.id ) )
+		const loaded = saved.filter( s => !known.has( s.id ) ).map( s => drawEntry( m, s.points.map( p => geodeticToEcef( p.longitude, p.latitude, p.height ) ), s ) )
+		entries.value = [ ...entries.value, ...loaded ]
 	} catch ( e ) {
 		host.notify( `Could not load your measurements: ${e instanceof ApiError ? e.message : e}`, 'error' )
 	} finally {
