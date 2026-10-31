@@ -16,6 +16,7 @@
 	--ds-ink: #1d1d1f;
 	--ds-ink-muted-80: #333333;
 	--ds-pearl: #fafafc;
+	--ds-parchment: #f5f5f7;
 	--ds-divider-soft: rgba(0, 0, 0, 0.04);
 	--ds-hairline: rgba(0, 0, 0, 0.08);
 	--ds-chip: rgba(210, 210, 215, 0.64);
@@ -41,6 +42,7 @@
 		--ds-ink: #f5f5f7;
 		--ds-ink-muted-80: #e6e8ec;
 		--ds-pearl: #2a2a2c;
+		--ds-parchment: #232326;
 		--ds-divider-soft: rgba(255, 255, 255, 0.06);
 		--ds-hairline: rgba(255, 255, 255, 0.12);
 		--ds-chip: rgba(118, 118, 128, 0.36);
@@ -110,6 +112,8 @@ button.small, .button.small { padding: 3px 8px; font-size: 13px; }
 .model-page .panel button, .model-page .popup button { border-radius: var(--ds-pill); padding: 7px 16px; background: var(--ds-pearl); color: var(--ds-ink-muted-80);
 	border: 1px solid var(--ds-hairline); }
 .model-page .panel button.small, .model-page .popup button.small { padding: 5px 14px; font-size: 13px; }
+/* the panel is a column; a button standing on its own keeps its own width instead of stretching across it */
+.model-page .panel > button, .model-page .popup > button { align-self: flex-start; }
 .model-page .panel button:hover:not(:disabled), .model-page .popup button:hover:not(:disabled) { border-color: var(--ds-primary); }
 .model-page .panel button.primary, .model-page .popup button.primary { background: var(--ds-primary); border-color: var(--ds-primary); color: #fff; }
 .model-page .panel button.danger, .model-page .popup button.danger { color: var(--danger); }
@@ -119,6 +123,32 @@ button.small, .button.small { padding: 3px 8px; font-size: 13px; }
 .model-page button.icon-circle { width: 28px; height: 28px; padding: 0; justify-content: center; border: none; border-radius: 50%;
 	background: var(--ds-chip); color: var(--ds-ink); font-size: 12px; }
 .model-page button.icon-circle:hover:not(:disabled) { background: var(--ds-chip); border: none; filter: brightness(0.94); }
+
+/* panel and popup content: body-strong title, caption text, quiet fields, grouped lists */
+.model-page .panel > header h2 { font-size: 17px; font-weight: 600; letter-spacing: -0.374px; }
+.model-page .panel p, .model-page .popup p { margin: 0; font-size: 14px; line-height: 1.43; letter-spacing: -0.224px; }
+.model-page .panel label, .model-page .popup label { font-size: 14px; letter-spacing: -0.224px; }
+.model-page .panel input:not([type='checkbox']):not([type='range']):not([type='file']), .model-page .popup input {
+	padding: 6px 10px; font-size: 14px; border: 1px solid var(--ds-hairline); border-radius: var(--ds-rounded-sm); background: var(--ds-pearl); }
+.model-page .panel input:focus-visible, .model-page .popup input:focus-visible { outline: 2px solid var(--ds-primary-focus); outline-offset: 0; border-color: transparent; }
+.model-page .panel input[type='range'] { accent-color: var(--ds-primary); }
+.model-page .progress { height: 6px; border-radius: var(--ds-pill); background: var(--ds-hairline); }
+.model-page .progress > div { background: var(--ds-primary); }
+
+/* segmented control of icon buttons (e.g. the measuring modes): a parchment track, the chosen one in Action Blue */
+.model-page .segmented { display: flex; gap: 2px; padding: 3px; border-radius: var(--ds-rounded-md); background: var(--ds-parchment); }
+.model-page .segmented button { flex: 1; width: auto; height: 38px; padding: 0; border: none; border-radius: var(--ds-rounded-sm); background: transparent; color: var(--ds-ink); }
+.model-page .segmented button:hover:not(:disabled) { background: var(--ds-hairline); }
+.model-page .segmented button.on, .model-page .segmented button.on:hover { background: var(--ds-primary); color: #fff; }
+
+/* grouped list (results, saved tours): rows on a parchment card, hairlines between them */
+.model-page .list { list-style: none; margin: 0; padding: 0 12px; border-radius: var(--ds-rounded-md); background: var(--ds-parchment); font-size: 14px; }
+.model-page .list > li { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 0; }
+.model-page .list > li + li { border-top: 1px solid var(--ds-hairline); }
+.model-page .list > li > span:first-child { flex: 1; }
+/* small icon-only button inside a row */
+.model-page .panel button.icon-only { width: 26px; height: 26px; padding: 0; justify-content: center; border: none; border-radius: 50%; background: transparent; color: var(--muted); }
+.model-page .panel button.icon-only:hover:not(:disabled) { background: var(--ds-hairline); color: var(--danger); }
 
 /* Cesium's own widget buttons (full screen, navigation help) as circular frosted chips */
 .model-page .cesium-viewer-toolbar { top: 12px; right: 12px; }

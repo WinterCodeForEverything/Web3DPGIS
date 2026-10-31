@@ -91,9 +91,9 @@ onUnmounted( () => {
 	<section>
 		<h2>Saved tours</h2>
 		<p v-if="!paths.length" class="muted">No saved tours yet.</p>
-		<ul class="paths">
-			<li v-for="p in paths" :key="p.id" class="row">
-				<span class="spacer">{{ p.name }} <span class="muted">({{ p.points.length }} views)</span></span>
+		<ul v-if="paths.length" class="list">
+			<li v-for="p in paths" :key="p.id">
+				<span>{{ p.name }} <span class="muted">({{ p.points.length }} views)</span></span>
 				<button v-if="playing === p.id" class="small" @click="stop">Stop</button>
 				<button v-else class="small primary" @click="play( p )">Play</button>
 				<button v-if="ctx.model.value.can_edit" class="small danger" :aria-label="`Delete ${p.name}`" @click="remove( p )">✕</button>
@@ -120,7 +120,6 @@ onUnmounted( () => {
 <style scoped>
 section { display: flex; flex-direction: column; gap: 8px; }
 h2 { margin: 0; font-size: 14px; }
-.paths { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 .small { font-size: 13px; }
 p { margin: 0; }
 </style>

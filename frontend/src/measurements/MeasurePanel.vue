@@ -3,6 +3,8 @@ import { inject, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { ApiError } from '@/api/http'
 import { measurementsApi } from '@/measurements/measurementsApi'
 import { useAuth } from '@/stores/auth'
+import AppIcon from '@/components/AppIcon.vue'
+import IconButton from '@/components/IconButton.vue'
 import { ecefToGeodetic, geodeticToEcef, type Vec3 } from '@/geo/geometry'
 import { measureHostKey } from './measureHost'
 import { MODES, describeMeasurement, modeInfo, modeOfKind, previewShapes, segmentShapes, type Mode } from './measurementShapes'
@@ -118,24 +120,29 @@ async function clearAll() {
 </script>
 
 <template>
-	<div class="modes" role="radiogroup" aria-label="Measurement">
-		<button v-for="m in MODES" :key="m.id" class="small" :class="{ primary: mode === m.id }" role="radio" :aria-checked="mode === m.id" @click="mode = m.id">{{ m.title }}</button>
+	<div class="segmented" role="radiogroup" aria-label="Measurement">
+		<IconButton v-for="m in MODES" :key="m.id" :icon="m.icon" :label="m.title" tip="below" :class="{ on: mode === m.id }"
+			role="radio" :aria-checked="mode === m.id" @click="mode = m.id" />
 	</div>
-	<p class="muted">{{ modeInfo( mode ).hint }}</p>
-	<ol v-if="entries.length" class="results">
+	<div class="mode">
+		<strong>{{ modeInfo( mode ).title }}</strong>
+		<p class="muted">{{ modeInfo( mode ).hint }}</p>
+	</div>
+	<ol v-if="entries.length" class="list">
 		<li v-for="e in entries" :key="e.key">
 			<span>{{ e.text }}</span>
-			<button class="link" :aria-label="e.id === null ? 'Remove measurement' : 'Delete saved measurement'" title="Delete" @click="remove( e )">✕</button>
+			<button class="icon-only" :aria-label="e.id === null ? 'Remove measurement' : 'Delete saved measurement'" title="Delete" @click="remove( e )">
+				<AppIcon name="close" :size="14" />
+			</button>
 		</li>
 	</ol>
 	<p class="muted small">{{ auth.user ? 'Measurements are saved to your account for this model.' : 'Log in to save your measurements.' }}</p>
-	<button class="small" :disabled="!entries.length" @click="clearAll">{{ entries.some( e => e.id !== null ) ? 'Delete all' : 'Clear' }}</button>
+	<button class="small" :disabled="!entries.length" @click="clearAll"><AppIcon name="trash" :size="16" />{{ entries.some( e => e.id !== null ) ? 'Delete all' : 'Clear' }}</button>
 </template>
 
 <style scoped>
-.modes { display: flex; flex-wrap: wrap; gap: 6px; }
-.results { margin: 0; padding-left: 20px; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
-.results li span { margin-right: 6px; }
+.mode { display: flex; flex-direction: column; gap: 2px; }
+.mode strong { font-size: 14px; font-weight: 600; letter-spacing: -0.224px; }
 p { margin: 0; font-size: 14px; }
 .small { font-size: 13px; }
 </style>

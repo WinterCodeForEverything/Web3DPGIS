@@ -1,5 +1,6 @@
 // What a measurement shows, independent of the viewer: the line for the results list and the shapes to draw.
 // Points are Earth-centred (ECEF) metres, so the same maths serves the map viewer and the 3D model viewer.
+import type { IconName } from '@/icons'
 import type { MeasurementKind } from '@/measurements/measurementsApi'
 import {
 	boundsCentre, circle, ecefToGeodetic, formatArea, formatLength, midpoint, polygonArea, polylineLength, segmentLengths,
@@ -11,6 +12,7 @@ export type Mode = 'point' | 'distance' | 'area' | 'triangle' | 'circle'
 export interface ModeInfo {
 	id: Mode
 	title: string
+	icon: IconName
 	hint: string
 	kind: MeasurementKind
 	/** Clicks that complete the measurement; undefined when it is finished with a right-click. */
@@ -20,11 +22,11 @@ export interface ModeInfo {
 }
 
 export const MODES: ModeInfo[] = [
-	{ id: 'point', title: 'Coordinates', hint: 'Click a point.', kind: 'point', clicks: 1, minimum: 1 },
-	{ id: 'distance', title: 'Distance', hint: 'Click points along a path; each segment shows its length. Right-click to finish and show the total.', kind: 'distance', minimum: 2 },
-	{ id: 'area', title: 'Area', hint: 'Click the corners; right-click to finish.', kind: 'area', minimum: 3 },
-	{ id: 'triangle', title: 'Height difference', hint: 'Click two points.', kind: 'height', clicks: 2, minimum: 2 },
-	{ id: 'circle', title: 'Circle', hint: 'Click the centre, then a point on the edge.', kind: 'circle', clicks: 2, minimum: 2 },
+	{ id: 'point', title: 'Coordinates', icon: 'coordinates', hint: 'Click a point.', kind: 'point', clicks: 1, minimum: 1 },
+	{ id: 'distance', title: 'Distance', icon: 'distance', hint: 'Click points along a path; each segment shows its length. Right-click to finish and show the total.', kind: 'distance', minimum: 2 },
+	{ id: 'area', title: 'Area', icon: 'area', hint: 'Click the corners; right-click to finish.', kind: 'area', minimum: 3 },
+	{ id: 'triangle', title: 'Height difference', icon: 'heightDifference', hint: 'Click two points.', kind: 'height', clicks: 2, minimum: 2 },
+	{ id: 'circle', title: 'Circle', icon: 'circle', hint: 'Click the centre, then a point on the edge.', kind: 'circle', clicks: 2, minimum: 2 },
 ]
 
 export const modeInfo = ( id: Mode ) => MODES.find( m => m.id === id )!
