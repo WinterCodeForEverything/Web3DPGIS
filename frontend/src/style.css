@@ -24,9 +24,10 @@
 	--ds-frost-filter: saturate(180%) blur(20px);
 	--ds-glass: rgba(210, 210, 215, 0.5);
 	--ds-glass-muted: #3a3a3c;
-	/* fills of what sits on a glass panel: a step deeper than the panel (fields, buttons), and a step deeper again (cards, tracks) */
-	--ds-glass-fill: rgba(0, 0, 0, 0.06);
-	--ds-glass-fill-deep: rgba(0, 0, 0, 0.1);
+	/* fills of what sits on a glass panel, nearly opaque so the scene barely shows through them: a step deeper than the panel
+	   (fields, buttons), and a step deeper again (cards, tracks) */
+	--ds-glass-fill: rgba(200, 200, 205, 0.85);
+	--ds-glass-fill-deep: rgba(186, 186, 192, 0.85);
 	--ds-rounded-sm: 8px;
 	--ds-rounded-md: 11px;
 	--ds-rounded-lg: 18px;
@@ -53,8 +54,8 @@
 		--ds-chip: rgba(118, 118, 128, 0.36);
 		--ds-glass: rgba(72, 72, 74, 0.5);
 		--ds-glass-muted: #c7c7cc;
-		--ds-glass-fill: rgba(0, 0, 0, 0.16);
-		--ds-glass-fill-deep: rgba(0, 0, 0, 0.24);
+		--ds-glass-fill: rgba(58, 58, 60, 0.85);
+		--ds-glass-fill-deep: rgba(44, 44, 46, 0.85);
 	}
 }
 
