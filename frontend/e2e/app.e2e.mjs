@@ -177,12 +177,12 @@ try {
 	await clickText( 'Save' )
 	await clickText( 'Coordinates' )
 	await canvasClick( 0, 0 )
-	check( 'point coordinates near the placement', /Point: 113\.26\d*, 23\.13\d*/.test( await textOf( '.list' ) ), await textOf( '.list' ) )
+	check( 'point coordinates near the placement', /Point: 113\.26° E, 23\.13° N, [\d.]+ m/.test( await textOf( '.list' ) ), await textOf( '.list' ) )
 	await clickText( "Don't save" )
 	await sleep( 500 )
 	check( "Don't save leaves the measurement listed but unsaved", ( await textOf( '.list' ) ).includes( 'Not saved' ) && !( await savedMeasurements() ).some( m => m.kind === 'point' ),
 		await textOf( '.list' ) )
-	await page.click( '.list button.item' )
+	await page.click( '.list button.edit' )
 	await clickText( 'Save' )
 	await page.waitForFunction( async () => ( await ( await fetch( `/api/v1/measurements/?model=${location.pathname.split( '/' )[2]}` ) ).json() ).results.some( m => m.kind === 'point' ), { timeout: 5000 } ).catch( () => {} )
 	// each measurement saved from its panel is stored: a path as one line with its segment lengths, an area as a closed polygon
@@ -197,11 +197,14 @@ try {
 	await clickText( 'Distance' )
 	await page.waitForFunction( () => document.querySelectorAll( '.list li' ).length === 2, { timeout: 10000 } ).catch( () => {} )
 	check( 'saved distances come back when the kind is chosen', ( await page.$$( '.list li' ) ).length === 2, await textOf( '.list' ) )
-	// picking one from the list shows its properties (and moves the camera to it)
+	// clicking one in the list moves the camera to it; only its Edit property button opens the property panel
 	await page.click( '.list button.item[aria-label="Show Lobby path"]' )
 	await sleep( 1500 )
+	check( 'clicking a list item does not open the property panel', !( await page.$( '.measure-properties' ) ) )
+	await page.click( '.list button.edit[aria-label="Edit property of Lobby path"]' )
+	await sleep( 300 )
 	const props = await textOf( '.measure-properties' )
-	check( 'list item opens its property panel', props.includes( 'Lobby path' ) && await page.$eval( '.measure-properties textarea', t => t.value ) === 'From the door to the desk', props )
+	check( 'Edit property opens the property panel', props.includes( 'Lobby path' ) && await page.$eval( '.measure-properties textarea', t => t.value ) === 'From the door to the desk', props )
 	await shot( '2-measure.png' )
 
 	// 6. labels

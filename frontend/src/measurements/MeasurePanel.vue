@@ -36,6 +36,8 @@ let nextKey = 1
 const mode = ref<Mode | null>( null )
 // the measurement shown in the property panel; isNew while it is the one just measured
 const selected = shallowRef<Entry | null>( null )
+// the measurement last brought into view from the list, marked there
+const focused = shallowRef<Entry | null>( null )
 const isNew = ref( false )
 const loading = ref( false )
 let points: Vec3[] = []
@@ -63,6 +65,7 @@ function clearEntries() {
 	entries.value.forEach( e => e.erase() )
 	entries.value = []
 	selected.value = null
+	focused.value = null
 }
 
 /** A measurement is complete: draw it for good, list it and open its property panel. It is saved from there, or not at all. */
@@ -127,11 +130,16 @@ onUnmounted( () => {
 	clearEntries()
 } )
 
-/** Show a listed measurement in the property panel and bring it to the middle of the view. */
-function open( entry: Entry ) {
+/** Bring a listed measurement to the middle of the view. */
+function show( entry: Entry ) {
+	focused.value = entry
+	host.focus( entry.points )
+}
+
+/** Open a listed measurement's property panel (Edit property). */
+function edit( entry: Entry ) {
 	selected.value = entry
 	isNew.value = false
-	host.focus( entry.points )
 }
 
 /** Save from the property panel: the first Save stores the measurement with its name and annotation, later ones change those. */
@@ -169,6 +177,7 @@ async function remove( entry: Entry ) {
 	entry.erase()
 	entries.value = entries.value.filter( x => x !== entry )
 	if ( selected.value === entry ) selected.value = null
+	if ( focused.value === entry ) focused.value = null
 }
 
 async function clearAll() {
@@ -191,19 +200,22 @@ async function clearAll() {
 	<p v-else class="muted">Choose what to measure. Your saved measurements of that kind are shown with it.</p>
 	<p v-if="loading" class="muted small">Loading your measurements…</p>
 	<ol v-if="entries.length" class="list">
-		<li v-for="e in entries" :key="e.key" :class="{ selected: selected === e }">
-			<button class="item" :aria-label="`Show ${e.name || e.text}`" @click="open( e )">
+		<li v-for="e in entries" :key="e.key" :class="{ selected: selected === e || ( !selected && focused === e ) }">
+			<button class="item" :aria-label="`Show ${e.name || e.text}`" @click="show( e )">
 				<strong v-if="e.name">{{ e.name }}</strong>
 				<span>{{ e.text }}</span>
 				<span v-if="e.annotation" class="muted note">{{ e.annotation }}</span>
 				<span v-if="auth.user && e.id === null" class="muted small">Not saved</span>
+			</button>
+			<button class="icon-only edit" :aria-label="`Edit property of ${e.name || e.text}`" title="Edit property" @click="edit( e )">
+				<AppIcon name="edit" :size="15" />
 			</button>
 			<button class="icon-only" :aria-label="e.id === null ? 'Remove measurement' : 'Delete saved measurement'" title="Delete" @click="remove( e )">
 				<AppIcon name="close" :size="14" />
 			</button>
 		</li>
 	</ol>
-	<p v-if="mode" class="muted small">{{ auth.user ? 'Save a measurement in its panel to keep it in your account. Click one to see it.' : 'Log in to save your measurements.' }}</p>
+	<p v-if="mode" class="muted small">{{ auth.user ? 'Save a measurement in its panel to keep it in your account. Click one to see it, or its pencil to edit it.' : 'Log in to save your measurements.' }}</p>
 	<button v-if="entries.length" class="small" @click="clearAll"><AppIcon name="trash" :size="16" />{{ entries.some( e => e.id !== null ) ? 'Delete all' : 'Clear' }}</button>
 
 	<!-- the property panel sits on the right of the viewer, outside the tool panel -->

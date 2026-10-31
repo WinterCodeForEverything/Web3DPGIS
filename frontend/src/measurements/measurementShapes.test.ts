@@ -9,6 +9,13 @@ function at( e: number, n: number, u = 0 ): Vec3 {
 }
 
 describe( 'measurement shapes', () => {
+	it( 'coordinates show two decimal places of a degree with their hemisphere, and the height in metres', () => {
+		const { text, shapes } = describeMeasurement( 'point', [ geodeticToEcef( 113.25924, 23.12552, 30.8146 ) ] )
+		expect( text ).toBe( 'Point: 113.26° E, 23.13° N, 30.81 m' )
+		expect( shapes.find( s => s.type === 'label' ) ).toMatchObject( { text: '113.26° E, 23.13° N, 30.81 m' } )
+		expect( describeMeasurement( 'point', [ geodeticToEcef( -81.752, -41.304, 0 ) ] ).text ).toBe( 'Point: 81.75° W, 41.30° S, 0.00 m' )
+	} )
+
 	it( 'a path draws each segment with its length; only the panel text has the total', () => {
 		const { text, shapes } = describeMeasurement( 'distance', [ at( 0, 0 ), at( 30, 0 ), at( 30, 40 ) ] )
 		expect( text ).toBe( 'Distance: 70.00 m' )

@@ -54,8 +54,11 @@ export function segmentShapes( a: Vec3, b: Vec3 ): Shape[] {
 export function describeMeasurement( mode: Mode, points: Vec3[] ): { text: string; shapes: Shape[] } {
 	const shapes: Shape[] = points.map( at => ( { type: 'mark', at } ) )
 	if ( mode === 'point' ) {
+		// shown to two decimal places of a degree; the saved point keeps full precision
 		const g = ecefToGeodetic( points[0] )
-		const value = `${g.longitude.toFixed( 6 )}, ${g.latitude.toFixed( 6 )}, ${g.height.toFixed( 2 )} m`
+		const lon = `${Math.abs( g.longitude ).toFixed( 2 )}° ${g.longitude < 0 ? 'W' : 'E'}`
+		const lat = `${Math.abs( g.latitude ).toFixed( 2 )}° ${g.latitude < 0 ? 'S' : 'N'}`
+		const value = `${lon}, ${lat}, ${g.height.toFixed( 2 )} m`
 		shapes.push( { type: 'label', at: points[0], text: value } )
 		return { text: `Point: ${value}`, shapes }
 	}

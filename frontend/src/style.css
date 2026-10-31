@@ -156,6 +156,7 @@ button.small, .button.small { padding: 3px 8px; font-size: 13px; }
 /* small icon-only button inside a row */
 .model-page .panel button.icon-only { width: 26px; height: 26px; padding: 0; justify-content: center; border: none; border-radius: 50%; background: transparent; color: var(--muted); }
 .model-page .panel button.icon-only:hover:not(:disabled) { background: var(--ds-hairline); color: var(--danger); }
+.model-page .panel button.icon-only.edit:hover:not(:disabled) { color: var(--ds-primary); }
 
 /* Cesium's own widget buttons (full screen, navigation help) as circular frosted chips */
 .model-page .cesium-viewer-toolbar { top: 12px; right: 12px; }
