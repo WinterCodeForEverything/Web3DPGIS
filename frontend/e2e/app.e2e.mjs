@@ -138,7 +138,7 @@ try {
 	check( 'model viewer: distance panels show only the total', /^Distance: [\d.]+ m$/.test( await textOf( '.list li span' ) ) && /Distance: [\d.]+ m(?! \()/.test( await textOf( '.measure-properties .result' ) ),
 		`${await textOf( '.list' )} | ${await textOf( '.measure-properties .result' )}` )
 	const segmentLabels = await page.$$eval( '.stage div span', els => els.map( e => e.textContent ).filter( t => /^(Total )?[\d.]+ m$/.test( t ) ) )
-	check( 'model viewer: segment and total labels drawn', segmentLabels.length === 3 && segmentLabels.some( t => t.startsWith( 'Total' ) ), segmentLabels.join( ', ' ) )
+	check( 'model viewer: segment labels drawn, without a total', segmentLabels.length === 2 && !segmentLabels.some( t => t.startsWith( 'Total' ) ), segmentLabels.join( ', ' ) )
 	// a new measurement opens its property panel; it is saved, with a name and an annotation, only by its Save button
 	check( 'model viewer: property panel opens for the new measurement', ( await textOf( '.measure-properties' ) ).includes( 'New distance measurement' ), await textOf( '.measure-properties' ) )
 	await sleep( 500 )

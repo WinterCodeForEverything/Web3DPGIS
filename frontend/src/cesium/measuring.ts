@@ -18,7 +18,7 @@ function entityOptions( shape: Shape ): Cesium.Entity.ConstructorOptions {
 			return { polyline: { positions: shape.points.map( cartesian ), width: 2, material: color, depthFailMaterial: color.withAlpha( 0.4 ) } }
 		}
 		case 'label':
-			return { position: cartesian( shape.at ), label: { ...( shape.total ? drawStyle.totalLabel : drawStyle.label ), text: shape.text } }
+			return { position: cartesian( shape.at ), label: { ...drawStyle.label, text: shape.text } }
 		case 'polygon':
 			return { polygon: { hierarchy: new Cesium.PolygonHierarchy( shape.points.map( cartesian ) ), material: drawStyle.fill, perPositionHeight: true } }
 		case 'circle': {

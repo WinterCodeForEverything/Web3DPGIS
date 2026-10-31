@@ -9,13 +9,13 @@ function at( e: number, n: number, u = 0 ): Vec3 {
 }
 
 describe( 'measurement shapes', () => {
-	it( 'a path shows each segment, its length, and the total in its own style', () => {
+	it( 'a path draws each segment with its length; only the panel text has the total', () => {
 		const { text, shapes } = describeMeasurement( 'distance', [ at( 0, 0 ), at( 30, 0 ), at( 30, 40 ) ] )
 		expect( text ).toBe( 'Distance: 70.00 m' )
 		expect( shapes.filter( s => s.type === 'mark' ) ).toHaveLength( 3 )
 		expect( shapes.filter( s => s.type === 'line' ) ).toHaveLength( 2 )
 		const labels = shapes.flatMap( s => ( s.type === 'label' ? [ s ] : [] ) )
-		expect( labels.map( l => [ l.text, !!l.total ] ) ).toEqual( [ [ '30.00 m', false ], [ '40.00 m', false ], [ 'Total 70.00 m', true ] ] )
+		expect( labels.map( l => l.text ) ).toEqual( [ '30.00 m', '40.00 m' ] )
 	} )
 
 	it( 'an area is filled and outlined, with surface and plan area for a slope', () => {

@@ -23,7 +23,7 @@ export interface ModeInfo {
 
 export const MODES: ModeInfo[] = [
 	{ id: 'point', title: 'Coordinates', icon: 'coordinates', hint: 'Click a point.', kind: 'point', clicks: 1, minimum: 1 },
-	{ id: 'distance', title: 'Distance', icon: 'distance', hint: 'Click points along a path; each segment shows its length. Right-click to finish and show the total.', kind: 'distance', minimum: 2 },
+	{ id: 'distance', title: 'Distance', icon: 'distance', hint: 'Click points along a path; each segment shows its length. Right-click to finish; the total is shown here.', kind: 'distance', minimum: 2 },
 	{ id: 'area', title: 'Area', icon: 'area', hint: 'Click the corners; right-click to finish.', kind: 'area', minimum: 3 },
 	{ id: 'triangle', title: 'Height difference', icon: 'heightDifference', hint: 'Click two points.', kind: 'height', clicks: 2, minimum: 2 },
 	{ id: 'circle', title: 'Circle', icon: 'circle', hint: 'Click the centre, then a point on the edge.', kind: 'circle', clicks: 2, minimum: 2 },
@@ -34,11 +34,11 @@ export const modeOfKind = ( kind: MeasurementKind ) => MODES.find( m => m.kind =
 
 export type LineColor = 'yellow' | 'blue' | 'green'
 
-/** Something a viewer draws. Labels marked `total` sum up a measurement and stand out from the others. */
+/** Something a viewer draws. */
 export type Shape =
 	| { type: 'mark'; at: Vec3 }
 	| { type: 'line'; points: Vec3[]; color: LineColor }
-	| { type: 'label'; at: Vec3; text: string; total?: boolean }
+	| { type: 'label'; at: Vec3; text: string }
 	| { type: 'polygon'; points: Vec3[] }
 	| { type: 'circle'; centre: Vec3; radius: number }
 
@@ -60,13 +60,9 @@ export function describeMeasurement( mode: Mode, points: Vec3[] ): { text: strin
 		return { text: `Point: ${value}`, shapes }
 	}
 	if ( mode === 'distance' ) {
-		// every segment with its length at its middle, and the total at the centre of the clicked points
-		const segments = segmentLengths( points )
-		segments.forEach( ( _, i ) => shapes.push( ...segmentShapes( points[i], points[i + 1] ) ) )
-		const total = formatLength( polylineLength( points ) )
-		shapes.push( { type: 'label', at: boundsCentre( points ), text: `Total ${total}`, total: true } )
-		// the panels show only the total; the segment lengths are on the drawing
-		return { text: `Distance: ${total}`, shapes }
+		// the viewer shows every segment with its length at its middle; the panels show only the total
+		segmentLengths( points ).forEach( ( _, i ) => shapes.push( ...segmentShapes( points[i], points[i + 1] ) ) )
+		return { text: `Distance: ${formatLength( polylineLength( points ) )}`, shapes }
 	}
 	if ( mode === 'area' ) {
 		// surface area for walls and roofs, plus the horizontal footprint (plan area) when they differ
