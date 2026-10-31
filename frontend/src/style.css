@@ -22,12 +22,12 @@
 	--ds-chip: rgba(210, 210, 215, 0.64);
 	--ds-frost: rgba(29, 29, 31, 0.72);
 	--ds-frost-filter: saturate(180%) blur(20px);
-	--ds-glass: rgba(210, 210, 215, 0.85);
+	--ds-glass: rgba(206, 212, 218, 0.85);    /* #ced4da */
 	--ds-glass-muted: #3a3a3c;
-	/* fills of what sits on a glass panel, nearly opaque so the scene barely shows through them: a step deeper than the panel
-	   (fields, buttons), and a step deeper again (cards, tracks) */
-	--ds-glass-fill: rgba(200, 200, 205, 0.85);
-	--ds-glass-fill-deep: rgba(186, 186, 192, 0.85);
+	/* fills of what sits on a glass panel, deeper than the panel at the same opacity: fields and buttons (fill), and cards,
+	   tracks and close buttons (fill-deep); in light mode both are #adb5bd */
+	--ds-glass-fill: rgba(173, 181, 189, 0.85);    /* #adb5bd */
+	--ds-glass-fill-deep: rgba(173, 181, 189, 0.85);
 	--ds-rounded-sm: 8px;
 	--ds-rounded-md: 11px;
 	--ds-rounded-lg: 18px;
