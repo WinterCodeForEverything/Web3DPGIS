@@ -65,7 +65,8 @@ export function describeMeasurement( mode: Mode, points: Vec3[] ): { text: strin
 		segments.forEach( ( _, i ) => shapes.push( ...segmentShapes( points[i], points[i + 1] ) ) )
 		const total = formatLength( polylineLength( points ) )
 		shapes.push( { type: 'label', at: boundsCentre( points ), text: `Total ${total}`, total: true } )
-		return { text: segments.length > 1 ? `Distance: ${total} (${segments.map( formatLength ).join( ' + ' )})` : `Distance: ${total}`, shapes }
+		// the panels show only the total; the segment lengths are on the drawing
+		return { text: `Distance: ${total}`, shapes }
 	}
 	if ( mode === 'area' ) {
 		// surface area for walls and roofs, plus the horizontal footprint (plan area) when they differ

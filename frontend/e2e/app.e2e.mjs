@@ -133,8 +133,10 @@ try {
 	}
 	// below the Lobby label, which sits at the centre and would take the click
 	await stageClick( -80, 60 ); await stageClick( 0, 110 ); await stageClick( 80, 60 ); await stageClick( 80, 60, 'right' )
-	await page.waitForFunction( () => /Distance: [\d.]+ m \(/.test( document.querySelector( '.list' )?.textContent ?? '' ), { timeout: 5000 } ).catch( () => {} )
-	check( 'model viewer: distance measured per segment', /Distance: [\d.]+ m \([\d.]+ m \+ [\d.]+ m\)/.test( await textOf( '.list' ) ), await textOf( '.list' ) )
+	await page.waitForFunction( () => /Distance: [\d.]+ m/.test( document.querySelector( '.list' )?.textContent ?? '' ), { timeout: 5000 } ).catch( () => {} )
+	// the panels show only the total; the segment lengths are drawn in the viewer
+	check( 'model viewer: distance panels show only the total', /^Distance: [\d.]+ m$/.test( await textOf( '.list li span' ) ) && /Distance: [\d.]+ m(?! \()/.test( await textOf( '.measure-properties .result' ) ),
+		`${await textOf( '.list' )} | ${await textOf( '.measure-properties .result' )}` )
 	const segmentLabels = await page.$$eval( '.stage div span', els => els.map( e => e.textContent ).filter( t => /^(Total )?[\d.]+ m$/.test( t ) ) )
 	check( 'model viewer: segment and total labels drawn', segmentLabels.length === 3 && segmentLabels.some( t => t.startsWith( 'Total' ) ), segmentLabels.join( ', ' ) )
 	// a new measurement opens its property panel; it is saved, with a name and an annotation, only by its Save button
@@ -164,7 +166,7 @@ try {
 	await clickText( 'Measure' )
 	await clickText( 'Distance' )
 	await canvasClick( -60, 20 ); await canvasClick( 0, -20 ); await canvasClick( 60, 20 ); await canvasClick( 60, 20, 'right' )
-	check( 'distance measurement', /Distance: [\d.]+ m \([\d.]+ m \+ [\d.]+ m\)/.test( await textOf( '.list' ) ), await textOf( '.list' ) )
+	check( 'distance measurement', /^Distance: [\d.]+ m$/.test( await textOf( '.list li span' ) ), await textOf( '.list' ) )
 	check( 'distance list shows the saved distance from the model viewer too', ( await textOf( '.list' ) ).includes( 'Lobby path' ), await textOf( '.list' ) )
 	await clickText( 'Save' )
 	await shot( '2-distance.png' )

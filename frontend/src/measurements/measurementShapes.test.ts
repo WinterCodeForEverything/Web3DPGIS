@@ -11,7 +11,7 @@ function at( e: number, n: number, u = 0 ): Vec3 {
 describe( 'measurement shapes', () => {
 	it( 'a path shows each segment, its length, and the total in its own style', () => {
 		const { text, shapes } = describeMeasurement( 'distance', [ at( 0, 0 ), at( 30, 0 ), at( 30, 40 ) ] )
-		expect( text ).toBe( 'Distance: 70.00 m (30.00 m + 40.00 m)' )
+		expect( text ).toBe( 'Distance: 70.00 m' )
 		expect( shapes.filter( s => s.type === 'mark' ) ).toHaveLength( 3 )
 		expect( shapes.filter( s => s.type === 'line' ) ).toHaveLength( 2 )
 		const labels = shapes.flatMap( s => ( s.type === 'label' ? [ s ] : [] ) )
