@@ -1,5 +1,5 @@
 // Measuring in the three.js viewer: draws the shared measurement shapes and passes on clicks.
-import { BufferGeometry, DoubleSide, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, type Object3D } from 'three'
+import { BufferGeometry, DoubleSide, Sphere, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, type Object3D } from 'three'
 import { Line2 } from 'three/examples/jsm/lines/Line2.js'
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
@@ -14,7 +14,6 @@ import type { ModelViewer } from './ModelViewer'
 // the same look as the map viewer's measurements
 const COLORS: Record<LineColor, number> = { yellow: 0xffff00, blue: 0x00bfff, green: 0x00ff00 }
 const LABEL_STYLE = 'font: 14px sans-serif; color: #fff; background: rgba(0, 0, 0, 0.6); padding: 1px 4px; border-radius: 3px; white-space: nowrap; text-shadow: 0 0 3px #000'
-const TOTAL_STYLE = 'font: bold 15px sans-serif; color: #fff; background: rgba(217, 72, 15, 0.9); padding: 1px 4px; border-radius: 3px; white-space: nowrap'
 
 function html( element: HTMLElement, at: Vec3, viewer: ModelViewer, bottom = false ) {
 	const object = new CSS2DObject( element )
@@ -30,12 +29,12 @@ function mark( at: Vec3, viewer: ModelViewer ) {
 	return html( dot, at, viewer )
 }
 
-function label( at: Vec3, text: string, total: boolean, viewer: ModelViewer ) {
+function label( at: Vec3, text: string, viewer: ModelViewer ) {
 	const outer = document.createElement( 'div' )
 	outer.style.paddingBottom = '12px'
 	const span = document.createElement( 'span' )
 	span.textContent = text
-	span.style.cssText = total ? TOTAL_STYLE : LABEL_STYLE
+	span.style.cssText = LABEL_STYLE
 	outer.append( span )
 	return html( outer, at, viewer, true )
 }
@@ -67,7 +66,7 @@ function fill( points: Vec3[], viewer: ModelViewer ) {
 function objectsFor( shape: Shape, viewer: ModelViewer ): Object3D[] {
 	switch ( shape.type ) {
 		case 'mark': return [ mark( shape.at, viewer ) ]
-		case 'label': return [ label( shape.at, shape.text, !!shape.total, viewer ) ]
+		case 'label': return [ label( shape.at, shape.text, viewer ) ]
 		case 'line': return [ line( shape.points, COLORS[ shape.color ], viewer ) ]
 		case 'polygon': return shape.points.length >= 3 ? [ fill( shape.points, viewer ) ] : []
 		case 'circle': {
@@ -121,6 +120,12 @@ export function threeMeasureHost( viewer: ShallowRef<ModelViewer | null>, model:
 				dispose( group )
 				v.requestRender()
 			}
+		},
+		focus( points ) {
+			const v = viewer.value
+			if ( !v || !points.length ) return
+			const sphere = new Sphere().setFromPoints( points.map( p => v.ecefToLocal( p ) ) )
+			v.focusOn( sphere.center, sphere.radius )
 		},
 	}
 }

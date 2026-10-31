@@ -55,12 +55,11 @@ function clear() {
 <template>
 	<p class="muted">Click where the observer stands, then click the target.</p>
 	<label class="row small">Observer eye height <input v-model.number="eyeHeight" type="number" min="0" step="0.1" style="width: 70px" /> m</label>
-	<ol v-if="results.length" class="results"><li v-for="( r, i ) in results" :key="i">{{ r }}</li></ol>
+	<ol v-if="results.length" class="list"><li v-for="( r, i ) in results" :key="i"><span>{{ r }}</span></li></ol>
 	<button class="small" @click="clear">Clear</button>
 </template>
 
 <style scoped>
 p { margin: 0; font-size: 14px; }
 .small { font-size: 13px; }
-.results { margin: 0; padding-left: 20px; font-size: 14px; }
 </style>

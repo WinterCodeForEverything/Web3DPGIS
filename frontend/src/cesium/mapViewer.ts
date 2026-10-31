@@ -108,9 +108,4 @@ export const drawStyle = {
 		pixelOffset: new Cesium.Cartesian2( 0, -12 ), disableDepthTestDistance: Number.POSITIVE_INFINITY,
 		showBackground: true, backgroundColor: Cesium.Color.BLACK.withAlpha( 0.6 ),
 	},
-	// a result that sums up a measurement (e.g. a path's total length), set apart from the per-part labels
-	totalLabel: {} as Cesium.LabelGraphics.ConstructorOptions,
-}
-drawStyle.totalLabel = {
-	...drawStyle.label, font: 'bold 15px sans-serif', backgroundColor: Cesium.Color.fromCssColorString( '#d9480f' ).withAlpha( 0.9 ),
 }

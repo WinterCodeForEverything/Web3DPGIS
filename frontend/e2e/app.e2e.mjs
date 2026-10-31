@@ -126,20 +126,31 @@ try {
 	// measuring in the model viewer works like the map viewer's and saves to the same place
 	await clickText( 'Measure' )
 	await clickText( 'Distance' )
+	const savedMeasurements = () => page.evaluate( async () => ( await ( await fetch( `/api/v1/measurements/?model=${location.pathname.split( '/' )[2]}` ) ).json() ).results )
 	const stageClick = async ( dx, dy, button = 'left' ) => {
 		await page.mouse.click( stage.x + stage.width / 2 + dx, stage.y + stage.height / 2 + dy, { button } )
 		await sleep( 300 )
 	}
 	// below the Lobby label, which sits at the centre and would take the click
 	await stageClick( -80, 60 ); await stageClick( 0, 110 ); await stageClick( 80, 60 ); await stageClick( 80, 60, 'right' )
-	await page.waitForFunction( () => /Distance: [\d.]+ m \(/.test( document.querySelector( '.results' )?.textContent ?? '' ), { timeout: 5000 } ).catch( () => {} )
-	check( 'model viewer: distance measured per segment', /Distance: [\d.]+ m \([\d.]+ m \+ [\d.]+ m\)/.test( await textOf( '.results' ) ), await textOf( '.results' ) )
+	await page.waitForFunction( () => /Distance: [\d.]+ m/.test( document.querySelector( '.list' )?.textContent ?? '' ), { timeout: 5000 } ).catch( () => {} )
+	// the panels show only the total; the segment lengths are drawn in the viewer
+	check( 'model viewer: distance panels show only the total', /^Distance: [\d.]+ m$/.test( await textOf( '.list li span' ) ) && /Distance: [\d.]+ m(?! \()/.test( await textOf( '.measure-properties .result' ) ),
+		`${await textOf( '.list' )} | ${await textOf( '.measure-properties .result' )}` )
 	const segmentLabels = await page.$$eval( '.stage div span', els => els.map( e => e.textContent ).filter( t => /^(Total )?[\d.]+ m$/.test( t ) ) )
-	check( 'model viewer: segment and total labels drawn', segmentLabels.length === 3 && segmentLabels.some( t => t.startsWith( 'Total' ) ), segmentLabels.join( ', ' ) )
+	check( 'model viewer: segment labels drawn, without a total', segmentLabels.length === 2 && !segmentLabels.some( t => t.startsWith( 'Total' ) ), segmentLabels.join( ', ' ) )
+	// a new measurement opens its property panel; it is saved, with a name and an annotation, only by its Save button
+	check( 'model viewer: property panel opens for the new measurement', ( await textOf( '.measure-properties' ) ).includes( 'New distance measurement' ), await textOf( '.measure-properties' ) )
 	await sleep( 500 )
-	const modelMeasurements = await page.evaluate( async () => ( await ( await fetch( `/api/v1/measurements/?model=${location.pathname.split( '/' )[2]}` ) ).json() ).results )
-	check( 'model viewer: measurement saved', modelMeasurements.length === 1 && modelMeasurements[0].kind === 'distance' && modelMeasurements[0].points.length === 3,
-		JSON.stringify( modelMeasurements.map( m => [ m.kind, m.points.length ] ) ) )
+	check( 'model viewer: nothing saved before Save', ( await savedMeasurements() ).length === 0, JSON.stringify( await savedMeasurements() ) )
+	await page.type( '.measure-properties input', 'Lobby path' )
+	await page.type( '.measure-properties textarea', 'From the door to the desk' )
+	await clickText( 'Save' )
+	await page.waitForFunction( async () => ( await ( await fetch( `/api/v1/measurements/?model=${location.pathname.split( '/' )[2]}` ) ).json() ).results[0]?.name === 'Lobby path', { timeout: 5000 } ).catch( () => {} )
+	const modelMeasurements = await savedMeasurements()
+	check( 'model viewer: measurement saved with its name and annotation', modelMeasurements.length === 1 && modelMeasurements[0].kind === 'distance'
+		&& modelMeasurements[0].points.length === 3 && modelMeasurements[0].name === 'Lobby path' && modelMeasurements[0].annotation === 'From the door to the desk',
+		JSON.stringify( modelMeasurements ) )
 	await shot( '1-model-viewer-measure.png' )
 	await page.click( '.panel button[aria-label="Close tool"]' )
 
@@ -155,23 +166,45 @@ try {
 	await clickText( 'Measure' )
 	await clickText( 'Distance' )
 	await canvasClick( -60, 20 ); await canvasClick( 0, -20 ); await canvasClick( 60, 20 ); await canvasClick( 60, 20, 'right' )
-	check( 'distance measurement', /Distance: [\d.]+ m \([\d.]+ m \+ [\d.]+ m\)/.test( await textOf( '.results' ) ), await textOf( '.results' ) )
+	check( 'distance measurement', /^Distance: [\d.]+ m$/.test( await textOf( '.list li span' ) ), await textOf( '.list' ) )
+	check( 'distance list shows the saved distance from the model viewer too', ( await textOf( '.list' ) ).includes( 'Lobby path' ), await textOf( '.list' ) )
+	await clickText( 'Save' )
 	await shot( '2-distance.png' )
 	await clickText( 'Area' )
 	await canvasClick( -40, -20 ); await canvasClick( 40, -20 ); await canvasClick( 40, 30 ); await canvasClick( 40, 30, 'right' )
-	check( 'area measurement is non-zero', /Area: (?!0\.00 )[\d.]+ m²/.test( await textOf( '.results' ) ), await textOf( '.results' ) )
+	check( 'area measurement is non-zero', /Area: (?!0\.00 )[\d.]+ m²/.test( await textOf( '.list' ) ), await textOf( '.list' ) )
+	check( 'choosing a kind lists only that kind', !( await textOf( '.list' ) ).includes( 'Distance' ), await textOf( '.list' ) )
+	await clickText( 'Save' )
 	await clickText( 'Coordinates' )
 	await canvasClick( 0, 0 )
-	check( 'point coordinates near the placement', /Point: 113\.26\d*, 23\.13\d*/.test( await textOf( '.results' ) ), await textOf( '.results' ) )
-	// each finished measurement is saved: a path as one line with its segment lengths, an area as a closed polygon
-	const measurements = await page.evaluate( async () => ( await ( await fetch( `/api/v1/measurements/?model=${location.pathname.split( '/' )[2]}` ) ).json() ).results )
+	check( 'point coordinates near the placement', /Point: 113\.26° E, 23\.13° N, [\d.]+ m/.test( await textOf( '.list' ) ), await textOf( '.list' ) )
+	await clickText( "Don't save" )
+	await sleep( 500 )
+	check( "Don't save leaves the measurement listed but unsaved", ( await textOf( '.list' ) ).includes( 'Not saved' ) && !( await savedMeasurements() ).some( m => m.kind === 'point' ),
+		await textOf( '.list' ) )
+	await page.click( '.list button.edit' )
+	await clickText( 'Save' )
+	await page.waitForFunction( async () => ( await ( await fetch( `/api/v1/measurements/?model=${location.pathname.split( '/' )[2]}` ) ).json() ).results.some( m => m.kind === 'point' ), { timeout: 5000 } ).catch( () => {} )
+	// each measurement saved from its panel is stored: a path as one line with its segment lengths, an area as a closed polygon
+	const measurements = await savedMeasurements()
 	const byKind = Object.fromEntries( measurements.map( m => [ m.kind, m ] ) )
 	check( 'measurements saved', measurements.length === 4 && byKind.distance?.points.length === 3 && byKind.distance.results.segment_lengths_m.length === 2
 		&& byKind.area?.points.length === 3 && byKind.area.results.area_m2 > 0 && byKind.point?.points.length === 1, JSON.stringify( measurements.map( m => [ m.kind, m.points.length, m.results ] ) ) )
 	await page.click( '.panel button[aria-label="Close tool"]' )
 	await clickText( 'Measure' )
-	await page.waitForFunction( () => document.querySelectorAll( '.results li' ).length === 4, { timeout: 10000 } ).catch( () => {} )
-	check( 'saved measurements come back when the tool reopens', ( await page.$$( '.results li' ) ).length === 4, await textOf( '.results' ) )
+	await sleep( 1000 )
+	check( 'nothing is loaded until a kind is chosen', ( await page.$$( '.list li' ) ).length === 0, await textOf( '.list' ) )
+	await clickText( 'Distance' )
+	await page.waitForFunction( () => document.querySelectorAll( '.list li' ).length === 2, { timeout: 10000 } ).catch( () => {} )
+	check( 'saved distances come back when the kind is chosen', ( await page.$$( '.list li' ) ).length === 2, await textOf( '.list' ) )
+	// clicking one in the list moves the camera to it; only its Edit property button opens the property panel
+	await page.click( '.list button.item[aria-label="Show Lobby path"]' )
+	await sleep( 1500 )
+	check( 'clicking a list item does not open the property panel', !( await page.$( '.measure-properties' ) ) )
+	await page.click( '.list button.edit[aria-label="Edit property of Lobby path"]' )
+	await sleep( 300 )
+	const props = await textOf( '.measure-properties' )
+	check( 'Edit property opens the property panel', props.includes( 'Lobby path' ) && await page.$eval( '.measure-properties textarea', t => t.value ) === 'From the door to the desk', props )
 	await shot( '2-measure.png' )
 
 	// 6. labels
@@ -208,7 +241,7 @@ try {
 	// 9. analysis tools
 	await clickText( 'Sight line' )
 	await canvasClick( -60, 40 ); await canvasClick( 60, -20 )
-	check( 'sight line result', /Visible|Blocked/.test( await textOf( '.results' ) ), await textOf( '.results' ) )
+	check( 'sight line result', /Visible|Blocked/.test( await textOf( '.list' ) ), await textOf( '.list' ) )
 	await clickText( 'Viewshed' )
 	await page.$eval( '.panel input[type=number][min="8"]', el => { el.value = '12'; el.dispatchEvent( new Event( 'input' ) ) } )
 	await canvasClick( -80, 60 ); await canvasClick( 40, -30 )

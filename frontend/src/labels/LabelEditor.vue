@@ -78,8 +78,8 @@ async function removeAll() {
 
 <style scoped>
 .icons { display: flex; flex-wrap: wrap; gap: 6px; }
-.icon { width: 40px; height: 40px; padding: 4px; justify-content: center; }
-.icon.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.icons .icon { width: 40px; height: 40px; padding: 4px; justify-content: center; border-radius: var(--ds-rounded-md); }
+.icons .icon.on { border: 2px solid var(--ds-primary-focus); padding: 3px; }
 .icon img { max-width: 100%; max-height: 100%; }
 .small { font-size: 13px; }
 p { margin: 0; }

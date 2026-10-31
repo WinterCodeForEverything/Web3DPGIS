@@ -11,6 +11,7 @@ import { drawLabels, threeLabelHost } from '@/three/labelLayer'
 import { threeMeasureHost } from '@/three/measuring'
 import { ModelViewer } from '@/three/ModelViewer'
 import { MODEL_TOOLS } from '@/three/tools'
+import IconButton from '@/components/IconButton.vue'
 import ToolDock from '@/components/ToolDock.vue'
 
 const props = defineProps<{ id: number }>()
@@ -80,10 +81,10 @@ watch( wireframe, on => viewer.value?.setWireframe( on ) )
 		<div ref="container" class="stage" />
 
 		<ToolDock v-if="viewer" v-model:active="activeTool" :tools="MODEL_TOOLS" :model="model" label="View options and tools">
-			<button @click="viewer.resetView()">Reset view</button>
-			<button :class="{ on: autoRotate }" :aria-pressed="autoRotate" @click="autoRotate = !autoRotate">Rotate</button>
-			<button :class="{ on: grid }" :aria-pressed="grid" @click="grid = !grid">Grid</button>
-			<button :class="{ on: wireframe }" :aria-pressed="wireframe" @click="wireframe = !wireframe">Wireframe</button>
+			<IconButton icon="resetView" label="Reset view" @click="viewer.resetView()" />
+			<IconButton icon="rotate" label="Rotate" :on="autoRotate" @click="autoRotate = !autoRotate" />
+			<IconButton icon="grid" label="Grid" :on="grid" @click="grid = !grid" />
+			<IconButton icon="wireframe" label="Wireframe" :on="wireframe" @click="wireframe = !wireframe" />
 		</ToolDock>
 
 		<LabelPopup v-if="viewer" />

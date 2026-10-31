@@ -1,5 +1,6 @@
 // What a measurement shows, independent of the viewer: the line for the results list and the shapes to draw.
 // Points are Earth-centred (ECEF) metres, so the same maths serves the map viewer and the 3D model viewer.
+import type { IconName } from '@/icons'
 import type { MeasurementKind } from '@/measurements/measurementsApi'
 import {
 	boundsCentre, circle, ecefToGeodetic, formatArea, formatLength, midpoint, polygonArea, polylineLength, segmentLengths,
@@ -11,6 +12,7 @@ export type Mode = 'point' | 'distance' | 'area' | 'triangle' | 'circle'
 export interface ModeInfo {
 	id: Mode
 	title: string
+	icon: IconName
 	hint: string
 	kind: MeasurementKind
 	/** Clicks that complete the measurement; undefined when it is finished with a right-click. */
@@ -20,11 +22,11 @@ export interface ModeInfo {
 }
 
 export const MODES: ModeInfo[] = [
-	{ id: 'point', title: 'Coordinates', hint: 'Click a point.', kind: 'point', clicks: 1, minimum: 1 },
-	{ id: 'distance', title: 'Distance', hint: 'Click points along a path; each segment shows its length. Right-click to finish and show the total.', kind: 'distance', minimum: 2 },
-	{ id: 'area', title: 'Area', hint: 'Click the corners; right-click to finish.', kind: 'area', minimum: 3 },
-	{ id: 'triangle', title: 'Height difference', hint: 'Click two points.', kind: 'height', clicks: 2, minimum: 2 },
-	{ id: 'circle', title: 'Circle', hint: 'Click the centre, then a point on the edge.', kind: 'circle', clicks: 2, minimum: 2 },
+	{ id: 'point', title: 'Coordinates', icon: 'coordinates', hint: 'Click a point.', kind: 'point', clicks: 1, minimum: 1 },
+	{ id: 'distance', title: 'Distance', icon: 'distance', hint: 'Click points along a path; each segment shows its length. Right-click to finish; the total is shown here.', kind: 'distance', minimum: 2 },
+	{ id: 'area', title: 'Area', icon: 'area', hint: 'Click the corners; right-click to finish.', kind: 'area', minimum: 3 },
+	{ id: 'triangle', title: 'Height difference', icon: 'heightDifference', hint: 'Click two points.', kind: 'height', clicks: 2, minimum: 2 },
+	{ id: 'circle', title: 'Circle', icon: 'circle', hint: 'Click the centre, then a point on the edge.', kind: 'circle', clicks: 2, minimum: 2 },
 ]
 
 export const modeInfo = ( id: Mode ) => MODES.find( m => m.id === id )!
@@ -32,11 +34,11 @@ export const modeOfKind = ( kind: MeasurementKind ) => MODES.find( m => m.kind =
 
 export type LineColor = 'yellow' | 'blue' | 'green'
 
-/** Something a viewer draws. Labels marked `total` sum up a measurement and stand out from the others. */
+/** Something a viewer draws. */
 export type Shape =
 	| { type: 'mark'; at: Vec3 }
 	| { type: 'line'; points: Vec3[]; color: LineColor }
-	| { type: 'label'; at: Vec3; text: string; total?: boolean }
+	| { type: 'label'; at: Vec3; text: string }
 	| { type: 'polygon'; points: Vec3[] }
 	| { type: 'circle'; centre: Vec3; radius: number }
 
@@ -52,18 +54,18 @@ export function segmentShapes( a: Vec3, b: Vec3 ): Shape[] {
 export function describeMeasurement( mode: Mode, points: Vec3[] ): { text: string; shapes: Shape[] } {
 	const shapes: Shape[] = points.map( at => ( { type: 'mark', at } ) )
 	if ( mode === 'point' ) {
+		// shown to two decimal places of a degree; the saved point keeps full precision
 		const g = ecefToGeodetic( points[0] )
-		const value = `${g.longitude.toFixed( 6 )}, ${g.latitude.toFixed( 6 )}, ${g.height.toFixed( 2 )} m`
+		const lon = `${Math.abs( g.longitude ).toFixed( 2 )}° ${g.longitude < 0 ? 'W' : 'E'}`
+		const lat = `${Math.abs( g.latitude ).toFixed( 2 )}° ${g.latitude < 0 ? 'S' : 'N'}`
+		const value = `${lon}, ${lat}, ${g.height.toFixed( 2 )} m`
 		shapes.push( { type: 'label', at: points[0], text: value } )
 		return { text: `Point: ${value}`, shapes }
 	}
 	if ( mode === 'distance' ) {
-		// every segment with its length at its middle, and the total at the centre of the clicked points
-		const segments = segmentLengths( points )
-		segments.forEach( ( _, i ) => shapes.push( ...segmentShapes( points[i], points[i + 1] ) ) )
-		const total = formatLength( polylineLength( points ) )
-		shapes.push( { type: 'label', at: boundsCentre( points ), text: `Total ${total}`, total: true } )
-		return { text: segments.length > 1 ? `Distance: ${total} (${segments.map( formatLength ).join( ' + ' )})` : `Distance: ${total}`, shapes }
+		// the viewer shows every segment with its length at its middle; the panels show only the total
+		segmentLengths( points ).forEach( ( _, i ) => shapes.push( ...segmentShapes( points[i], points[i + 1] ) ) )
+		return { text: `Distance: ${formatLength( polylineLength( points ) )}`, shapes }
 	}
 	if ( mode === 'area' ) {
 		// surface area for walls and roofs, plus the horizontal footprint (plan area) when they differ

@@ -9,11 +9,11 @@ import ViewshedTool from './ViewshedTool.vue'
 import WalkTool from './WalkTool.vue'
 
 export const MAP_TOOLS = defineTools( [
-	{ id: 'measure', title: 'Measure', component: MeasureTool },
-	{ id: 'labels', title: 'Labels', component: LabelEditor, editOnly: true },
-	{ id: 'flight', title: 'Flight', component: FlightTool },
-	{ id: 'walk', title: 'Walk', component: WalkTool },
-	{ id: 'sightline', title: 'Sight line', component: SightlineTool },
-	{ id: 'viewshed', title: 'Viewshed', component: ViewshedTool },
-	{ id: 'height', title: 'Height', component: HeightTool, editOnly: true },
+	{ id: 'measure', title: 'Measure', icon: 'measure', component: MeasureTool },
+	{ id: 'labels', title: 'Labels', icon: 'labels', component: LabelEditor, editOnly: true },
+	{ id: 'flight', title: 'Flight', icon: 'flight', component: FlightTool },
+	{ id: 'walk', title: 'Walk', icon: 'walk', component: WalkTool },
+	{ id: 'sightline', title: 'Sight line', icon: 'sightline', component: SightlineTool },
+	{ id: 'viewshed', title: 'Viewshed', icon: 'viewshed', component: ViewshedTool },
+	{ id: 'height', title: 'Height', icon: 'height', component: HeightTool, editOnly: true },
 ] )
