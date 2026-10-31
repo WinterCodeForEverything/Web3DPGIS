@@ -65,14 +65,15 @@ class FlightPathSerializer( ModelChildSerializerMixin, serializers.ModelSerializ
 
 
 class MeasurementSerializer( serializers.ModelSerializer ):
-	"""A measurement is sent as its kind and clicked points; the server stores them as one geometry and works out the results."""
+	"""A measurement is sent as its kind and clicked points; the server stores them as one geometry and works out the results.
+	Afterwards only its name and annotation can be changed."""
 	model = EditableModelField()
-	points = serializers.ListField( child = GeoPointField(), write_only = True )
+	points = serializers.ListField( child = GeoPointField(), write_only = True, required = False )
 	results = serializers.JSONField( read_only = True )
 
 	class Meta:
 		model = Measurement
-		fields = [ 'id', 'model', 'kind', 'name', 'points', 'results', 'created_at' ]
+		fields = [ 'id', 'model', 'kind', 'name', 'annotation', 'points', 'results', 'created_at' ]
 		read_only_fields = [ 'results', 'created_at' ]
 
 	def to_representation( self, instance ):
@@ -81,6 +82,14 @@ class MeasurementSerializer( serializers.ModelSerializer ):
 		return data
 
 	def validate( self, attrs ):
+		if self.instance is not None:
+			fixed = [ f for f in ( 'model', 'kind', 'points' ) if f in attrs ]
+			if fixed:
+				raise serializers.ValidationError( { f: 'This cannot be changed; delete the measurement and measure again.' for f in fixed } )
+			return attrs
+		missing = [ f for f in ( 'kind', 'points' ) if f not in attrs ]
+		if missing:
+			raise serializers.ValidationError( { f: 'This field is required.' for f in missing } )
 		kind, points = attrs['kind'], attrs['points']
 		fewest, most = measurement_math.POINT_COUNTS[ kind ]
 		if not fewest <= len( points ) <= most:
@@ -102,8 +111,9 @@ class FlightPathViewSet( viewsets.ModelViewSet ):
 
 
 class MeasurementViewSet( mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin,
-						mixins.DestroyModelMixin, viewsets.GenericViewSet ):
-	"""Your saved measurements; filter with ?model=<id> and ?kind=. Anyone signed in can measure models they can see."""
+						mixins.UpdateModelMixin, mixins.DestroyModelMixin, viewsets.GenericViewSet ):
+	"""Your saved measurements; filter with ?model=<id> and ?kind=. Anyone signed in can measure models they can see.
+	PATCH changes a measurement's name and annotation."""
 	serializer_class = MeasurementSerializer
 	permission_classes = [ permissions.IsAuthenticated, IsCreatorOrStaff ]
 	filterset_fields = [ 'model', 'kind' ]

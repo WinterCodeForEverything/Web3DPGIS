@@ -41,6 +41,7 @@ class Measurement( models.Model ):
 	  height    LineString Z from the first to the second point
 	  circle    LineString Z from the centre to a point on the edge
 	`results` holds the values worked out from it on the server (see viewer_tools.measurement_math).
+	`name` and `annotation` are the user's own words about it; both may stay empty, and only they can change after saving.
 	"""
 
 	class Kind( models.TextChoices ):
@@ -54,6 +55,7 @@ class Measurement( models.Model ):
 	created_by = models.ForeignKey( settings.AUTH_USER_MODEL, related_name = 'measurements', on_delete = models.CASCADE )
 	kind = models.CharField( max_length = 16, choices = Kind.choices )
 	name = models.CharField( max_length = 128, blank = True )
+	annotation = models.TextField( blank = True )
 	geometry = models.GeometryField( srid = 4326, dim = 3, spatial_index = True )
 	results = models.JSONField( default = dict, blank = True )
 	created_at = models.DateTimeField( auto_now_add = True )

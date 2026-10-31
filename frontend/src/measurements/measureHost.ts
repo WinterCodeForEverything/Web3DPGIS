@@ -20,6 +20,8 @@ export interface MeasureHost {
 	listen( input: MeasureInput ): () => void
 	/** Draw shapes. Returns a function that removes them again. */
 	draw( shapes: Shape[] ): () => void
+	/** Move the camera so these points are in the middle of the view, keeping the direction it looks from. */
+	focus( points: Vec3[] ): void
 }
 
 export const measureHostKey: InjectionKey<MeasureHost> = Symbol( 'measure-host' )

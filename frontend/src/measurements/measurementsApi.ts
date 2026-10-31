@@ -10,14 +10,18 @@ export interface Measurement {
 	model: number
 	kind: MeasurementKind
 	name: string
+	annotation: string
 	points: GeoPoint[]
 	results: Record<string, number | number[]>
 	created_at: string
 }
 
 export const measurementsApi = {
-	measurements: ( model: number ) => request<Page<Measurement>>( 'GET', '/measurements/' + query( { model } ) ),
+	measurements: ( model: number, kind?: MeasurementKind ) => request<Page<Measurement>>( 'GET', '/measurements/' + query( { model, kind } ) ),
 	createMeasurement: ( measurement: { model: number; kind: MeasurementKind; points: GeoPoint[]; name?: string } ) =>
 		request<Measurement>( 'POST', '/measurements/', measurement ),
+	/** Only the name and annotation can change once a measurement is saved. */
+	updateMeasurement: ( id: number, changes: { name?: string; annotation?: string } ) =>
+		request<Measurement>( 'PATCH', `/measurements/${id}/`, changes ),
 	deleteMeasurement: ( id: number ) => request<void>( 'DELETE', `/measurements/${id}/` ),
 }

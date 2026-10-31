@@ -27,6 +27,7 @@ const VIEW_DIRECTION = new Vector3( 1, 0.7, 1 ).normalize()
 // a pointer that moves further than this between press and release was dragging the camera, not clicking
 const CLICK_TOLERANCE_PX = 4
 const DEG = 180 / Math.PI
+const FLIGHT_MS = 600
 
 export class ModelViewer {
 	readonly renderer: WebGLRenderer
@@ -49,6 +50,8 @@ export class ModelViewer {
 	private fitted = false
 	private watchdog = 0
 	private wireframe = false
+	/** A camera move in progress (see focusOn), eased over FLIGHT_MS. */
+	private flight: { from: Vector3; to: Vector3; fromTarget: Vector3; toTarget: Vector3; start: number } | null = null
 
 	constructor( private readonly container: HTMLElement, url: string, private readonly events: ModelViewerOptions = {} ) {
 		this.placed = new Promise( resolve => { this.markPlaced = resolve } )
@@ -112,6 +115,19 @@ export class ModelViewer {
 		this.controls.target.copy( center )
 		this.controls.maxDistance = distance * 20
 		this.controls.update()
+		this.invalidate()
+	}
+
+	/** Move the camera so a sphere around centre fills the middle of the view, looking from the same direction as now. */
+	focusOn( centre: Vector3, radius: number ) {
+		// a single point has no size: frame a small part of the model around it instead
+		const size = Math.max( radius, this.bounds.radius * 0.08, 0.5 )
+		const distance = size / Math.sin( ( this.camera.fov * Math.PI ) / 360 ) * 1.5
+		const direction = this.camera.position.clone().sub( this.controls.target ).normalize()
+		this.flight = {
+			from: this.camera.position.clone(), to: centre.clone().addScaledVector( direction, distance ),
+			fromTarget: this.controls.target.clone(), toTarget: centre.clone(), start: performance.now(),
+		}
 		this.invalidate()
 	}
 
@@ -234,6 +250,7 @@ export class ModelViewer {
 	private render = () => {
 		this.frame = requestAnimationFrame( this.render )
 		// damping and auto-rotation keep moving the camera after the pointer stops
+		if ( this.flight ) this.fly()
 		const moved = this.controls.update()
 		if ( !moved && !this.dirty ) return
 		this.dirty = false
@@ -242,6 +259,16 @@ export class ModelViewer {
 		this.renderer.render( this.scene, this.camera )
 		this.overlay.render( this.scene, this.camera )
 		this.events.onProgress?.( this.tiles.loadProgress )
+	}
+
+	private fly() {
+		const f = this.flight!
+		const t = Math.min( ( performance.now() - f.start ) / FLIGHT_MS, 1 )
+		const eased = t * t * ( 3 - 2 * t )
+		this.camera.position.lerpVectors( f.from, f.to, eased )
+		this.controls.target.lerpVectors( f.fromTarget, f.toTarget, eased )
+		if ( t === 1 ) this.flight = null
+		this.dirty = true
 	}
 
 	private onRootLoaded = () => {

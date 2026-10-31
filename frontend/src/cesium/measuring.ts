@@ -58,5 +58,12 @@ export function cesiumMeasureHost( ctx: MapViewerContext, session: ToolSession )
 				viewer.scene.requestRender()
 			}
 		},
+		focus( points ) {
+			if ( !points.length ) return
+			const sphere = Cesium.BoundingSphere.fromPoints( points.map( p => new Cesium.Cartesian3( ...p ) ) )
+			// keep the heading; look down at least a little so the measurement is not edge-on
+			const offset = new Cesium.HeadingPitchRange( viewer.camera.heading, Math.min( viewer.camera.pitch, -0.35 ), Math.max( sphere.radius * 4, 40 ) )
+			viewer.camera.flyToBoundingSphere( sphere, { offset, duration: 0.8 } )
+		},
 	}
 }

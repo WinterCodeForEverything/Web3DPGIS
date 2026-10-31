@@ -1,5 +1,5 @@
 // Measuring in the three.js viewer: draws the shared measurement shapes and passes on clicks.
-import { BufferGeometry, DoubleSide, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, type Object3D } from 'three'
+import { BufferGeometry, DoubleSide, Sphere, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, type Object3D } from 'three'
 import { Line2 } from 'three/examples/jsm/lines/Line2.js'
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
@@ -121,6 +121,12 @@ export function threeMeasureHost( viewer: ShallowRef<ModelViewer | null>, model:
 				dispose( group )
 				v.requestRender()
 			}
+		},
+		focus( points ) {
+			const v = viewer.value
+			if ( !v || !points.length ) return
+			const sphere = new Sphere().setFromPoints( points.map( p => v.ecefToLocal( p ) ) )
+			v.focusOn( sphere.center, sphere.radius )
 		},
 	}
 }

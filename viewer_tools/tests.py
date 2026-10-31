@@ -123,6 +123,25 @@ class MeasurementTests( ModelTestBase ):
 		self.model.save()
 		self.assertIn( 'model', self.post( self.bob, 'distance', self.path ).data )
 
+	def test_name_and_annotation_can_be_changed_but_not_the_points( self ):
+		m = self.post( self.alice, 'distance', self.path ).data
+		self.assertEqual( ( m['name'], m['annotation'] ), ( '', '' ) )
+		url = f'/api/v1/measurements/{m["id"]}/'
+		r = self.as_user( self.alice ).patch( url, { 'name': 'Fence', 'annotation': 'North side, to the gate.' }, format = 'json' )
+		self.assertEqual( ( r.status_code, r.data['name'], r.data['annotation'] ), ( 200, 'Fence', 'North side, to the gate.' ), r.data )
+		self.assertEqual( len( r.data['points'] ), 4 )
+		r = self.as_user( self.alice ).patch( url, { 'points': self.path[:2], 'kind': 'area' }, format = 'json' )
+		self.assertEqual( ( r.status_code, set( r.data ) ), ( 400, { 'points', 'kind' } ) )
+		self.assertEqual( self.as_user( self.bob ).patch( url, { 'name': 'Mine' }, format = 'json' ).status_code, 404 )
+		missing = self.as_user( self.alice ).post( '/api/v1/measurements/', { 'model': self.model.pk, 'kind': 'distance' }, format = 'json' )
+		self.assertIn( 'points', missing.data )    # points are still needed to create one
+
+	def test_list_filters_by_kind( self ):
+		self.post( self.alice, 'distance', self.path )
+		self.post( self.alice, 'point', self.path[:1] )
+		r = self.as_user( self.alice ).get( '/api/v1/measurements/', { 'model': self.model.pk, 'kind': 'point' } )
+		self.assertEqual( [ m['kind'] for m in r.data['results'] ], [ 'point' ] )
+
 	def test_deleting_the_model_deletes_its_measurements( self ):
 		self.post( self.alice, 'area', self.roof )
 		self.model.delete()

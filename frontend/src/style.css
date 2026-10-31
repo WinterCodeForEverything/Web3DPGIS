@@ -128,9 +128,9 @@ button.small, .button.small { padding: 3px 8px; font-size: 13px; }
 .model-page .panel > header h2 { font-size: 17px; font-weight: 600; letter-spacing: -0.374px; }
 .model-page .panel p, .model-page .popup p { margin: 0; font-size: 14px; line-height: 1.43; letter-spacing: -0.224px; }
 .model-page .panel label, .model-page .popup label { font-size: 14px; letter-spacing: -0.224px; }
-.model-page .panel input:not([type='checkbox']):not([type='range']):not([type='file']), .model-page .popup input {
+.model-page .panel input:not([type='checkbox']):not([type='range']):not([type='file']), .model-page .popup input, .model-page .popup textarea {
 	padding: 6px 10px; font-size: 14px; border: 1px solid var(--ds-hairline); border-radius: var(--ds-rounded-sm); background: var(--ds-pearl); }
-.model-page .panel input:focus-visible, .model-page .popup input:focus-visible { outline: 2px solid var(--ds-primary-focus); outline-offset: 0; border-color: transparent; }
+.model-page .panel input:focus-visible, .model-page .popup input:focus-visible, .model-page .popup textarea:focus-visible { outline: 2px solid var(--ds-primary-focus); outline-offset: 0; border-color: transparent; }
 .model-page .panel input[type='range'] { accent-color: var(--ds-primary); }
 .model-page .progress { height: 6px; border-radius: var(--ds-pill); background: var(--ds-hairline); }
 .model-page .progress > div { background: var(--ds-primary); }
@@ -146,6 +146,13 @@ button.small, .button.small { padding: 3px 8px; font-size: 13px; }
 .model-page .list > li { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 0; }
 .model-page .list > li + li { border-top: 1px solid var(--ds-hairline); }
 .model-page .list > li > span:first-child { flex: 1; }
+/* a row that opens its item: the whole text is the button; the open item is marked in Action Blue */
+.model-page .list button.item { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 4px 0;
+	border: none; border-radius: 0; background: none; color: inherit; text-align: left; font-size: 14px; overflow-wrap: anywhere; }
+.model-page .list button.item:hover:not(:disabled) { background: none; color: var(--ds-primary); }
+.model-page .list button.item:active:not(:disabled) { transform: none; }
+.model-page .list > li.selected { margin: 0 -12px; padding-left: 9px; padding-right: 12px; border-left: 3px solid var(--ds-primary); }
+.model-page .list > li.selected button.item { color: var(--ds-primary); }
 /* small icon-only button inside a row */
 .model-page .panel button.icon-only { width: 26px; height: 26px; padding: 0; justify-content: center; border: none; border-radius: 50%; background: transparent; color: var(--muted); }
 .model-page .panel button.icon-only:hover:not(:disabled) { background: var(--ds-hairline); color: var(--danger); }
