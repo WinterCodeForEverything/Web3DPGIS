@@ -22,7 +22,7 @@
 	--ds-chip: rgba(210, 210, 215, 0.64);
 	--ds-frost: rgba(29, 29, 31, 0.72);
 	--ds-frost-filter: saturate(180%) blur(20px);
-	--ds-glass: rgba(210, 210, 215, 0.5);
+	--ds-glass: rgba(210, 210, 215, 0.85);
 	--ds-glass-muted: #3a3a3c;
 	/* fills of what sits on a glass panel, nearly opaque so the scene barely shows through them: a step deeper than the panel
 	   (fields, buttons), and a step deeper again (cards, tracks) */
@@ -52,7 +52,7 @@
 		--ds-divider-soft: rgba(255, 255, 255, 0.06);
 		--ds-hairline: rgba(255, 255, 255, 0.12);
 		--ds-chip: rgba(118, 118, 128, 0.36);
-		--ds-glass: rgba(72, 72, 74, 0.5);
+		--ds-glass: rgba(72, 72, 74, 0.85);
 		--ds-glass-muted: #c7c7cc;
 		--ds-glass-fill: rgba(58, 58, 60, 0.85);
 		--ds-glass-fill-deep: rgba(44, 44, 46, 0.85);
@@ -118,7 +118,7 @@ button.small, .button.small { padding: 3px 8px; font-size: 13px; }
 .frost button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); }
 .frost button.on, .frost button.on:hover { background: var(--ds-primary); color: #fff; }
 
-/* the tool panel and property panels: half-transparent grey over the scene, frosted so their text stays readable;
+/* the tool panel and property panels: grey at 85% over the scene, frosted so their text stays readable;
    secondary text is darker than usual because the scene shows through */
 .glass { background: var(--ds-glass); -webkit-backdrop-filter: var(--ds-frost-filter); backdrop-filter: var(--ds-frost-filter); --muted: var(--ds-glass-muted);
 	/* buttons, fields, lists and tracks inside take a deeper grey of the panel instead of white */
