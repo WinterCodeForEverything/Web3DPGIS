@@ -26,7 +26,7 @@ function toggle( id: string ) {
 		<IconButton v-for="t in shown" :key="t.id" :icon="t.icon" :label="t.title" :on="active === t.id" @click="toggle( t.id )" />
 	</aside>
 
-	<section v-if="open" class="panel" :aria-label="open.title">
+	<section v-if="open" class="panel glass" :aria-label="open.title">
 		<header class="row">
 			<h2 style="margin: 0">{{ open.title }}</h2>
 			<span class="spacer" />
@@ -42,5 +42,5 @@ function toggle( id: string ) {
 	border-radius: var(--ds-rounded-lg); }
 .toolbar hr { width: 28px; margin: 4px auto; border: none; border-top: 1px solid rgba(255, 255, 255, 0.16); }
 .panel { position: absolute; top: 12px; left: 80px; width: 320px; max-height: calc(100% - 24px); overflow: auto; z-index: 2;
-	background: var(--panel); border: 1px solid var(--ds-hairline); border-radius: var(--ds-rounded-lg); padding: 17px; display: flex; flex-direction: column; gap: 10px; }
+	border: 1px solid var(--ds-hairline); border-radius: var(--ds-rounded-lg); padding: 17px; display: flex; flex-direction: column; gap: 10px; }
 </style>

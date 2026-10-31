@@ -38,7 +38,7 @@ async function remove() {
 </script>
 
 <template>
-	<section v-if="store.selected.value" class="popup" aria-label="Label details">
+	<section v-if="store.selected.value" class="popup glass" aria-label="Label details">
 		<header class="row">
 			<strong>{{ store.selected.value.name }}</strong>
 			<span class="spacer" />
@@ -70,6 +70,6 @@ async function remove() {
 </template>
 
 <style scoped>
-.popup { position: absolute; top: 12px; right: 12px; width: 300px; z-index: 3; background: var(--panel); border: 1px solid var(--ds-hairline);
+.popup { position: absolute; top: 12px; right: 12px; width: 300px; z-index: 3; border: 1px solid var(--ds-hairline);
 	border-radius: var(--ds-rounded-lg); padding: 17px; display: flex; flex-direction: column; gap: 8px; }
 </style>

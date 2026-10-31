@@ -17,7 +17,7 @@ function save() {
 </script>
 
 <template>
-	<section class="popup measure-properties" aria-label="Measurement properties">
+	<section class="popup glass measure-properties" aria-label="Measurement properties">
 		<header class="row">
 			<strong>{{ isNew ? `New ${title.toLowerCase()} measurement` : name || title }}</strong>
 			<span class="spacer" />
@@ -39,7 +39,7 @@ function save() {
 </template>
 
 <style scoped>
-.popup { position: absolute; top: 12px; right: 12px; width: 300px; z-index: 3; background: var(--panel); border: 1px solid var(--ds-hairline);
+.popup { position: absolute; top: 12px; right: 12px; width: 300px; z-index: 3; border: 1px solid var(--ds-hairline);
 	border-radius: var(--ds-rounded-lg); padding: 17px; display: flex; flex-direction: column; gap: 10px; }
 header strong { font-size: 17px; font-weight: 600; letter-spacing: -0.374px; }
 .result { padding: 8px 12px; border-radius: var(--ds-rounded-md); background: var(--ds-parchment); }
