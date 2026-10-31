@@ -17,7 +17,8 @@ const auth = useAuth()
 
 /**
  * A finished measurement: its line in the results list, the user's name and annotation for it, and a function that removes
- * its drawing. id is set once it is saved; saving is the request that saves it, so edits made meanwhile can wait for it.
+ * its drawing. id is set once it is saved, which happens only when the user clicks Save in its property panel; saving is
+ * that request, so a second Save made meanwhile waits for it instead of saving the measurement twice.
  */
 interface Entry {
 	key: number
@@ -64,7 +65,7 @@ function clearEntries() {
 	selected.value = null
 }
 
-/** A measurement is complete: draw it for good, list it, save it for the signed-in user and ask for its name and annotation. */
+/** A measurement is complete: draw it for good, list it and open its property panel. It is saved from there, or not at all. */
 function complete() {
 	const m = mode.value!, pts = points
 	resetDraft()
@@ -72,13 +73,6 @@ function complete() {
 	entries.value = [ entry, ...entries.value ]
 	selected.value = entry
 	isNew.value = true
-	if ( !auth.user ) return
-	entry.saving = measurementsApi.createMeasurement( { model: host.model.value!.id, kind: modeInfo( m ).kind, points: pts.map( ecefToGeodetic ) } )
-		.then( saved => {
-			entry.id = saved.id
-			entries.value = [ ...entries.value ]
-		} )
-		.catch( e => host.notify( `Measurement not saved: ${e instanceof ApiError ? e.message : e}`, 'error' ) )
 }
 
 const stopListening = host.listen( {
@@ -140,23 +134,33 @@ function open( entry: Entry ) {
 	host.focus( entry.points )
 }
 
+/** Save from the property panel: the first Save stores the measurement with its name and annotation, later ones change those. */
 async function saveProperties( entry: Entry, changes: { name: string; annotation: string } ) {
 	Object.assign( entry, changes )
 	entries.value = [ ...entries.value ]
 	selected.value = null
 	if ( !auth.user ) return
-	await entry.saving
-	if ( entry.id === null ) return    // saving it failed, and was reported then
+	await entry.saving?.catch( () => {} )    // a Save still on its way; its failure was reported by that Save
 	try {
-		await measurementsApi.updateMeasurement( entry.id, changes )
+		if ( entry.id !== null ) {
+			await measurementsApi.updateMeasurement( entry.id, changes )
+			return
+		}
+		entry.saving = measurementsApi.createMeasurement( {
+			model: host.model.value!.id, kind: modeInfo( mode.value! ).kind, points: entry.points.map( ecefToGeodetic ), ...changes,
+		} ).then( saved => { entry.id = saved.id } )
+		await entry.saving
+		entries.value = [ ...entries.value ]
 	} catch ( e ) {
-		host.notify( `Name and annotation not saved: ${e instanceof ApiError ? e.message : e}`, 'error' )
+		host.notify( `Measurement not saved: ${e instanceof ApiError ? e.message : e}`, 'error' )
+	} finally {
+		entry.saving = null
 	}
 }
 
 async function remove( entry: Entry ) {
 	try {
-		await entry.saving
+		await entry.saving?.catch( () => {} )
 		if ( entry.id !== null ) await measurementsApi.deleteMeasurement( entry.id )
 	} catch ( e ) {
 		host.notify( e instanceof ApiError ? e.message : String( e ), 'error' )
@@ -192,13 +196,14 @@ async function clearAll() {
 				<strong v-if="e.name">{{ e.name }}</strong>
 				<span>{{ e.text }}</span>
 				<span v-if="e.annotation" class="muted note">{{ e.annotation }}</span>
+				<span v-if="auth.user && e.id === null" class="muted small">Not saved</span>
 			</button>
 			<button class="icon-only" :aria-label="e.id === null ? 'Remove measurement' : 'Delete saved measurement'" title="Delete" @click="remove( e )">
 				<AppIcon name="close" :size="14" />
 			</button>
 		</li>
 	</ol>
-	<p v-if="mode" class="muted small">{{ auth.user ? 'Measurements are saved to your account for this model. Click one to see it.' : 'Log in to save your measurements.' }}</p>
+	<p v-if="mode" class="muted small">{{ auth.user ? 'Save a measurement in its panel to keep it in your account. Click one to see it.' : 'Log in to save your measurements.' }}</p>
 	<button v-if="entries.length" class="small" @click="clearAll"><AppIcon name="trash" :size="16" />{{ entries.some( e => e.id !== null ) ? 'Delete all' : 'Clear' }}</button>
 
 	<!-- the property panel sits on the right of the viewer, outside the tool panel -->

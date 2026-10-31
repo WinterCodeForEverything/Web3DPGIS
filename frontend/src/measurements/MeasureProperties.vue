@@ -2,7 +2,8 @@
 import { ref } from 'vue'
 
 // The property panel of one measurement: its result, and a name and annotation the user may give it (both optional).
-// Shown right after a measurement is taken (isNew), and when one is picked from the list.
+// Shown right after a measurement is taken (isNew), and when one is picked from the list. Save is what stores a new measurement;
+// closing it instead leaves the measurement listed but unsaved.
 const props = defineProps<{ title: string; text: string; name: string; annotation: string; isNew: boolean; savedToAccount: boolean }>()
 const emit = defineEmits<{ save: [ { name: string; annotation: string } ]; close: [] }>()
 
@@ -32,7 +33,7 @@ function save() {
 		<p v-if="!savedToAccount" class="muted">Log in to keep these with your measurements.</p>
 		<div class="row">
 			<button class="small primary" @click="save">Save</button>
-			<button v-if="isNew" class="small" @click="emit( 'close' )">Skip</button>
+			<button v-if="isNew" class="small" @click="emit( 'close' )">Don't save</button>
 		</div>
 	</section>
 </template>

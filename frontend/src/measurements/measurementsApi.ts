@@ -18,7 +18,7 @@ export interface Measurement {
 
 export const measurementsApi = {
 	measurements: ( model: number, kind?: MeasurementKind ) => request<Page<Measurement>>( 'GET', '/measurements/' + query( { model, kind } ) ),
-	createMeasurement: ( measurement: { model: number; kind: MeasurementKind; points: GeoPoint[]; name?: string } ) =>
+	createMeasurement: ( measurement: { model: number; kind: MeasurementKind; points: GeoPoint[]; name?: string; annotation?: string } ) =>
 		request<Measurement>( 'POST', '/measurements/', measurement ),
 	/** Only the name and annotation can change once a measurement is saved. */
 	updateMeasurement: ( id: number, changes: { name?: string; annotation?: string } ) =>

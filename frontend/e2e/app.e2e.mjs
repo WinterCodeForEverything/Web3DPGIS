@@ -126,6 +126,7 @@ try {
 	// measuring in the model viewer works like the map viewer's and saves to the same place
 	await clickText( 'Measure' )
 	await clickText( 'Distance' )
+	const savedMeasurements = () => page.evaluate( async () => ( await ( await fetch( `/api/v1/measurements/?model=${location.pathname.split( '/' )[2]}` ) ).json() ).results )
 	const stageClick = async ( dx, dy, button = 'left' ) => {
 		await page.mouse.click( stage.x + stage.width / 2 + dx, stage.y + stage.height / 2 + dy, { button } )
 		await sleep( 300 )
@@ -136,18 +137,18 @@ try {
 	check( 'model viewer: distance measured per segment', /Distance: [\d.]+ m \([\d.]+ m \+ [\d.]+ m\)/.test( await textOf( '.list' ) ), await textOf( '.list' ) )
 	const segmentLabels = await page.$$eval( '.stage div span', els => els.map( e => e.textContent ).filter( t => /^(Total )?[\d.]+ m$/.test( t ) ) )
 	check( 'model viewer: segment and total labels drawn', segmentLabels.length === 3 && segmentLabels.some( t => t.startsWith( 'Total' ) ), segmentLabels.join( ', ' ) )
-	await sleep( 500 )
-	const modelMeasurements = await page.evaluate( async () => ( await ( await fetch( `/api/v1/measurements/?model=${location.pathname.split( '/' )[2]}` ) ).json() ).results )
-	check( 'model viewer: measurement saved', modelMeasurements.length === 1 && modelMeasurements[0].kind === 'distance' && modelMeasurements[0].points.length === 3,
-		JSON.stringify( modelMeasurements.map( m => [ m.kind, m.points.length ] ) ) )
-	// a new measurement opens its property panel, where it can be given a name and an annotation
+	// a new measurement opens its property panel; it is saved, with a name and an annotation, only by its Save button
 	check( 'model viewer: property panel opens for the new measurement', ( await textOf( '.measure-properties' ) ).includes( 'New distance measurement' ), await textOf( '.measure-properties' ) )
+	await sleep( 500 )
+	check( 'model viewer: nothing saved before Save', ( await savedMeasurements() ).length === 0, JSON.stringify( await savedMeasurements() ) )
 	await page.type( '.measure-properties input', 'Lobby path' )
 	await page.type( '.measure-properties textarea', 'From the door to the desk' )
 	await clickText( 'Save' )
 	await page.waitForFunction( async () => ( await ( await fetch( `/api/v1/measurements/?model=${location.pathname.split( '/' )[2]}` ) ).json() ).results[0]?.name === 'Lobby path', { timeout: 5000 } ).catch( () => {} )
-	const named = await page.evaluate( async () => ( await ( await fetch( `/api/v1/measurements/?model=${location.pathname.split( '/' )[2]}` ) ).json() ).results[0] )
-	check( 'model viewer: name and annotation saved', named?.name === 'Lobby path' && named?.annotation === 'From the door to the desk', JSON.stringify( named ) )
+	const modelMeasurements = await savedMeasurements()
+	check( 'model viewer: measurement saved with its name and annotation', modelMeasurements.length === 1 && modelMeasurements[0].kind === 'distance'
+		&& modelMeasurements[0].points.length === 3 && modelMeasurements[0].name === 'Lobby path' && modelMeasurements[0].annotation === 'From the door to the desk',
+		JSON.stringify( modelMeasurements ) )
 	await shot( '1-model-viewer-measure.png' )
 	await page.click( '.panel button[aria-label="Close tool"]' )
 
@@ -165,16 +166,25 @@ try {
 	await canvasClick( -60, 20 ); await canvasClick( 0, -20 ); await canvasClick( 60, 20 ); await canvasClick( 60, 20, 'right' )
 	check( 'distance measurement', /Distance: [\d.]+ m \([\d.]+ m \+ [\d.]+ m\)/.test( await textOf( '.list' ) ), await textOf( '.list' ) )
 	check( 'distance list shows the saved distance from the model viewer too', ( await textOf( '.list' ) ).includes( 'Lobby path' ), await textOf( '.list' ) )
+	await clickText( 'Save' )
 	await shot( '2-distance.png' )
 	await clickText( 'Area' )
 	await canvasClick( -40, -20 ); await canvasClick( 40, -20 ); await canvasClick( 40, 30 ); await canvasClick( 40, 30, 'right' )
 	check( 'area measurement is non-zero', /Area: (?!0\.00 )[\d.]+ m²/.test( await textOf( '.list' ) ), await textOf( '.list' ) )
 	check( 'choosing a kind lists only that kind', !( await textOf( '.list' ) ).includes( 'Distance' ), await textOf( '.list' ) )
+	await clickText( 'Save' )
 	await clickText( 'Coordinates' )
 	await canvasClick( 0, 0 )
 	check( 'point coordinates near the placement', /Point: 113\.26\d*, 23\.13\d*/.test( await textOf( '.list' ) ), await textOf( '.list' ) )
-	// each finished measurement is saved: a path as one line with its segment lengths, an area as a closed polygon
-	const measurements = await page.evaluate( async () => ( await ( await fetch( `/api/v1/measurements/?model=${location.pathname.split( '/' )[2]}` ) ).json() ).results )
+	await clickText( "Don't save" )
+	await sleep( 500 )
+	check( "Don't save leaves the measurement listed but unsaved", ( await textOf( '.list' ) ).includes( 'Not saved' ) && !( await savedMeasurements() ).some( m => m.kind === 'point' ),
+		await textOf( '.list' ) )
+	await page.click( '.list button.item' )
+	await clickText( 'Save' )
+	await page.waitForFunction( async () => ( await ( await fetch( `/api/v1/measurements/?model=${location.pathname.split( '/' )[2]}` ) ).json() ).results.some( m => m.kind === 'point' ), { timeout: 5000 } ).catch( () => {} )
+	// each measurement saved from its panel is stored: a path as one line with its segment lengths, an area as a closed polygon
+	const measurements = await savedMeasurements()
 	const byKind = Object.fromEntries( measurements.map( m => [ m.kind, m ] ) )
 	check( 'measurements saved', measurements.length === 4 && byKind.distance?.points.length === 3 && byKind.distance.results.segment_lengths_m.length === 2
 		&& byKind.area?.points.length === 3 && byKind.area.results.area_m2 > 0 && byKind.point?.points.length === 1, JSON.stringify( measurements.map( m => [ m.kind, m.points.length, m.results ] ) ) )
