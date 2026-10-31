@@ -24,6 +24,9 @@
 	--ds-frost-filter: saturate(180%) blur(20px);
 	--ds-glass: rgba(210, 210, 215, 0.5);
 	--ds-glass-muted: #3a3a3c;
+	/* fills of what sits on a glass panel: a step deeper than the panel (fields, buttons), and a step deeper again (cards, tracks) */
+	--ds-glass-fill: rgba(0, 0, 0, 0.06);
+	--ds-glass-fill-deep: rgba(0, 0, 0, 0.1);
 	--ds-rounded-sm: 8px;
 	--ds-rounded-md: 11px;
 	--ds-rounded-lg: 18px;
@@ -50,6 +53,8 @@
 		--ds-chip: rgba(118, 118, 128, 0.36);
 		--ds-glass: rgba(72, 72, 74, 0.5);
 		--ds-glass-muted: #c7c7cc;
+		--ds-glass-fill: rgba(0, 0, 0, 0.16);
+		--ds-glass-fill-deep: rgba(0, 0, 0, 0.24);
 	}
 }
 
@@ -114,7 +119,9 @@ button.small, .button.small { padding: 3px 8px; font-size: 13px; }
 
 /* the tool panel and property panels: half-transparent grey over the scene, frosted so their text stays readable;
    secondary text is darker than usual because the scene shows through */
-.glass { background: var(--ds-glass); -webkit-backdrop-filter: var(--ds-frost-filter); backdrop-filter: var(--ds-frost-filter); --muted: var(--ds-glass-muted); }
+.glass { background: var(--ds-glass); -webkit-backdrop-filter: var(--ds-frost-filter); backdrop-filter: var(--ds-frost-filter); --muted: var(--ds-glass-muted);
+	/* buttons, fields, lists and tracks inside take a deeper grey of the panel instead of white */
+	--ds-pearl: var(--ds-glass-fill); --ds-parchment: var(--ds-glass-fill-deep); --ds-chip: var(--ds-glass-fill-deep); }
 
 /* buttons inside panels and popups: pearl capsules, blue pills for the main action */
 .model-page .panel button, .model-page .popup button { border-radius: var(--ds-pill); padding: 7px 16px; background: var(--ds-pearl); color: var(--ds-ink-muted-80);
