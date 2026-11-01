@@ -55,7 +55,8 @@ class MigrationRoundTripTests( TransactionTestCase ):
 		label = Label.objects.get()
 		for got, want in zip( label.position.coords, GATE ):
 			self.assertAlmostEqual( got, want, places = 6 )
-		self.assertEqual( ( label.name, label.icon.image.name, label.properties ), ( 'Gate', 'label/pin.png', { 'property_url': '/media/label/1/1.json' } ) )
+		# icons live in their own storage since labels 0009 (assets/label-icons/), so the name loses its old label/ folder
+		self.assertEqual( ( label.name, label.icon.image.name, label.properties ), ( 'Gate', 'pin.png', { 'property_url': '/media/label/1/1.json' } ) )
 		point = FlightPoint.objects.get()
 		self.assertEqual( ( point.direction, point.up, point.order ), ( [ 0.0, 0.0, -1.0 ], [ 0.0, 1.0, 0.0 ], 0 ) )
 		for got, want in zip( point.position.coords, GATE ):
