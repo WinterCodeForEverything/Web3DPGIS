@@ -10,11 +10,11 @@ export interface LabelIcon {
 	can_edit: boolean
 }
 
-export type LabelKind = 'point' | 'polyline' | 'polygon' | 'circle' | 'wall' | 'sphere' | 'cylinder' | 'cone'
+export type LabelKind = 'point' | 'polyline' | 'polygon' | 'rectangle' | 'circle' | 'wall' | 'cuboid' | 'sphere' | 'cylinder' | 'cone'
 
 /**
  * A point or a shape on a model. `position` is the point itself, the centre of a circle or sphere, the base centre of a
- * cylinder or cone, or (for polylines, polygons and walls, whose vertices are `points`) where the name is shown.
+ * cylinder or cone, or (for polylines, polygons, rectangles, walls and cuboids, whose vertices are `points`) where the name is shown.
  * `radius` and `height` are in metres, for the kinds that have them; null otherwise.
  */
 export interface Label {

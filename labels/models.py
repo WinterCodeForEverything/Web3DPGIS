@@ -20,15 +20,17 @@ class LabelIcon( models.Model ):
 
 
 class Label( models.Model ):
-	"""A named marker or shape on a model: a point, a 2D shape (polyline, polygon, circle) or a 3D one (wall, sphere,
-	cylinder, cone). See labels.geometry for how each kind uses `position`, `geometry`, `radius` and `height`."""
+	"""A named marker or shape on a model: a point, a 2D shape (polyline, polygon, rectangle, circle) or a 3D one (wall,
+	cuboid, sphere, cylinder, cone). See labels.geometry for how each kind uses `position`, `geometry`, `radius` and `height`."""
 
 	class Kind( models.TextChoices ):
 		POINT = 'point', 'Point'
 		POLYLINE = 'polyline', 'Polyline'
 		POLYGON = 'polygon', 'Polygon'
+		RECTANGLE = 'rectangle', 'Rectangle'
 		CIRCLE = 'circle', 'Circle'
 		WALL = 'wall', 'Wall'
+		CUBOID = 'cuboid', 'Cuboid'
 		SPHERE = 'sphere', 'Sphere'
 		CYLINDER = 'cylinder', 'Cylinder'
 		CONE = 'cone', 'Cone'

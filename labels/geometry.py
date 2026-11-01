@@ -3,21 +3,24 @@
   point                          a marker at `position`
   polyline, polygon, wall        vertices in `geometry` (LineString Z, or Polygon Z with the ring closed); `position`
                                  is where the name is shown, by default the middle of the vertices
+  rectangle, cuboid              the four corners of the (base) rectangle in `geometry`, as a Polygon Z
   circle, sphere, cylinder, cone centred on `position` (the base centre for cylinders and cones), sized by `radius`
 
-`height` is how far a wall, cylinder or cone rises above its base, in metres.
+`height` is how far a wall, cuboid, cylinder or cone rises above its base, in metres.
 """
 from django.contrib.gis.geos import LineString, Point, Polygon
 
 # kind: ( fewest vertices, most vertices ), for kinds drawn through a list of vertices
-VERTEX_COUNTS = { 'polyline': ( 2, 1000 ), 'polygon': ( 3, 1000 ), 'wall': ( 2, 1000 ) }
+VERTEX_COUNTS = { 'polyline': ( 2, 1000 ), 'polygon': ( 3, 1000 ), 'rectangle': ( 4, 4 ), 'wall': ( 2, 1000 ), 'cuboid': ( 4, 4 ) }
 NEEDS_RADIUS = { 'circle', 'sphere', 'cylinder', 'cone' }
-NEEDS_HEIGHT = { 'wall', 'cylinder', 'cone' }
+NEEDS_HEIGHT = { 'wall', 'cuboid', 'cylinder', 'cone' }
+# kinds whose vertices are a closed outline
+RINGS = { 'polygon', 'rectangle', 'cuboid' }
 
 
 def build_geometry( kind, coords ):
 	"""The stored geometry of a label's vertices (lon, lat, height tuples)."""
-	if kind == 'polygon':
+	if kind in RINGS:
 		return Polygon( list( coords ) + [ coords[0] ], srid = 4326 )
 	return LineString( list( coords ), srid = 4326 )
 

@@ -30,6 +30,8 @@ export const ICONS = {
 	sphere: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0"/><path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/></g>',
 	cylinder: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M5 6c0 1.7 3.1 3 7 3s7-1.3 7-3s-3.1-3-7-3s-7 1.3-7 3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/></g>',
 	cone: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M12 3L5 18M12 3l7 15"/><path d="M5 18c0 1.7 3.1 3 7 3s7-1.3 7-3s-3.1-3-7-3s-7 1.3-7 3"/></g>',
+	rectangle: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M3 6h18v12H3z"/></g>',
+	cuboid: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M4 8l8-4l8 4v9l-8 4l-8-4z"/><path d="M4 8l8 4l8-4M12 12v9"/></g>',
 } as const
 
 export type IconName = keyof typeof ICONS

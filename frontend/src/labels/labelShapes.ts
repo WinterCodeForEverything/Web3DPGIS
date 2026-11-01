@@ -4,7 +4,7 @@ import type { IconName } from '@/icons'
 import type { GeoPoint } from '@/api/types'
 import type { Label, LabelInput, LabelKind } from '@/labels/labelsApi'
 import {
-	boundsCentre, distance, ecefToGeodetic, enuBasis, formatArea, formatLength, geodeticToEcef, polygonArea, polylineLength,
+	boundsCentre, distance, dot, ecefToGeodetic, enuBasis, formatArea, formatLength, geodeticToEcef, polygonArea, polylineLength,
 	triangle, type Vec3,
 } from '@/geo/geometry'
 import type { Shape, ShapeColor } from '@/geo/shapes'
@@ -25,13 +25,16 @@ export interface KindInfo {
 
 const VERTICES = 'Right-click to finish.'
 const ROUND = 'Click the centre, then a point on the edge.'
+const RECTANGLE = 'Click two corners along one side, then a point on the opposite side.'
 
 export const KINDS: KindInfo[] = [
 	{ id: 'point', title: 'Point', icon: 'pin', group: 'Point', hint: 'Click the model to place a label.', clicks: 1, minimum: 1 },
 	{ id: 'polyline', title: 'Polyline', icon: 'polyline', group: '2D', hint: `Click points along the line. ${VERTICES}`, minimum: 2 },
 	{ id: 'polygon', title: 'Polygon', icon: 'polygon', group: '2D', hint: `Click the corners. ${VERTICES}`, minimum: 3 },
+	{ id: 'rectangle', title: 'Rectangle', icon: 'rectangle', group: '2D', hint: RECTANGLE, clicks: 3, minimum: 3 },
 	{ id: 'circle', title: 'Circle', icon: 'circle', group: '2D', hint: ROUND, clicks: 2, minimum: 2 },
 	{ id: 'wall', title: 'Wall', icon: 'wall', group: '3D', hint: `Click points along the foot of the wall. ${VERTICES}`, minimum: 2, hasHeight: true },
+	{ id: 'cuboid', title: 'Cuboid', icon: 'cuboid', group: '3D', hint: `${RECTANGLE} These are the corners of its base.`, clicks: 3, minimum: 3, hasHeight: true },
 	{ id: 'sphere', title: 'Sphere', icon: 'sphere', group: '3D', hint: ROUND, clicks: 2, minimum: 2 },
 	{ id: 'cylinder', title: 'Cylinder', icon: 'cylinder', group: '3D', hint: `Click the centre of the base, then a point on its edge.`, clicks: 2, minimum: 2, hasHeight: true },
 	{ id: 'cone', title: 'Cone', icon: 'cone', group: '3D', hint: `Click the centre of the base, then a point on its edge.`, clicks: 2, minimum: 2, hasHeight: true },
@@ -50,6 +53,24 @@ function above( p: Vec3, by: number ): Vec3 {
 
 /** The size a round label gets from its two clicks: the horizontal distance, or the straight-line one for a sphere. */
 const radiusOf = ( kind: LabelKind, centre: Vec3, edge: Vec3 ) => kind === 'sphere' ? distance( centre, edge ) : triangle( centre, edge ).horizontal
+
+/** Rectangles and cuboids: drawn from three clicks, kept as the four corners of a (base) rectangle. */
+const isRectangular = ( kind: LabelKind ) => kind === 'rectangle' || kind === 'cuboid'
+
+/**
+ * The corners of a horizontal rectangle at a's height: a and b are two corners along one side (b is brought to a's height),
+ * and c is any point on the opposite side, which sets the width. Corners go round in order, starting at a.
+ */
+export function rectangleCorners( a: Vec3, b: Vec3, c: Vec3 ): Vec3[] {
+	const { east, north } = enuBasis( a )
+	const flat = ( p: Vec3 ) => { const d = [ p[0] - a[0], p[1] - a[1], p[2] - a[2] ] as Vec3; return [ dot( d, east ), dot( d, north ) ] }
+	const [ bx, by ] = flat( b ), [ cx, cy ] = flat( c )
+	const side = Math.hypot( bx, by ) || 1
+	// the width is how far c is from the a–b side, across it (signed, so the rectangle grows towards c)
+	const ux = bx / side, uy = by / side, width = cx * -uy + cy * ux
+	const at = ( x: number, y: number ): Vec3 => [ 0, 1, 2 ].map( i => a[i] + x * east[i] + y * north[i] ) as Vec3
+	return [ at( 0, 0 ), at( bx, by ), at( bx - uy * width, by + ux * width ), at( -uy * width, ux * width ) ]
+}
 
 /** A label's shape in ECEF, as the viewers and the maths need it. */
 export interface LabelGeometry {
@@ -75,6 +96,11 @@ export function labelGeometry( label: Pick<Label, 'kind' | 'position' | 'points'
 export function geometryFromClicks( kind: LabelKind, clicks: Vec3[], height: number, color: string ): LabelGeometry | null {
 	const base = { kind, height: kindInfo( kind ).hasHeight ? height : 0, color: color as ShapeColor }
 	if ( kind === 'point' ) return clicks.length ? { ...base, position: clicks[0], points: [], radius: 0 } : null
+	if ( isRectangular( kind ) ) {
+		if ( clicks.length < 3 ) return null
+		const corners = rectangleCorners( clicks[0], clicks[1], clicks[2] )
+		return { ...base, position: boundsCentre( corners ), points: corners, radius: 0 }
+	}
 	if ( kindInfo( kind ).clicks === 2 ) {
 		if ( clicks.length < 2 ) return null
 		return { ...base, position: clicks[0], points: [], radius: radiusOf( kind, clicks[0], clicks[1] ) }
@@ -128,9 +154,10 @@ export function iconAnchor( g: LabelGeometry ): { at: Vec3; standing: boolean } 
 	switch ( g.kind ) {
 		case 'point': return { at: g.position, standing: true }
 		case 'polyline': return { at: halfwayAlong( g.points ), standing: false }
-		case 'polygon': return { at: boundsCentre( g.points ), standing: false }
+		case 'polygon': case 'rectangle': return { at: boundsCentre( g.points ), standing: false }
 		case 'circle': return { at: g.position, standing: false }
 		case 'wall': return { at: above( halfwayAlong( g.points ), g.height ), standing: true }
+		case 'cuboid': return { at: above( boundsCentre( g.points ), g.height ), standing: true }
 		case 'sphere': return { at: above( g.position, g.radius ), standing: true }
 		case 'cylinder': case 'cone': return { at: above( g.position, g.height ), standing: true }
 	}
@@ -142,9 +169,10 @@ export function shapesOf( g: LabelGeometry ): Shape[] {
 	switch ( g.kind ) {
 		case 'point': return []
 		case 'polyline': return [ { type: 'line', points: g.points, color } ]
-		case 'polygon': return [ { type: 'polygon', points: g.points, color }, { type: 'line', points: [ ...g.points, g.points[0] ], color } ]
+		case 'polygon': case 'rectangle': return [ { type: 'polygon', points: g.points, color }, { type: 'line', points: [ ...g.points, g.points[0] ], color } ]
 		case 'circle': return [ { type: 'circle', centre: g.position, radius: g.radius, color } ]
 		case 'wall': return [ { type: 'wall', points: g.points, height: g.height, color } ]
+		case 'cuboid': return [ { type: 'box', points: g.points, height: g.height, color } ]
 		case 'sphere': return [ { type: 'sphere', centre: g.position, radius: g.radius, color } ]
 		case 'cylinder': return [ { type: 'cylinder', base: g.position, radius: g.radius, topRadius: g.radius, height: g.height, color } ]
 		case 'cone': return [ { type: 'cylinder', base: g.position, radius: g.radius, topRadius: 0, height: g.height, color } ]
@@ -154,12 +182,16 @@ export function shapesOf( g: LabelGeometry ): Shape[] {
 /** The drawing while a label is being clicked: the clicked points, and the shape as it would be with the cursor clicked. */
 export function draftShapes( kind: LabelKind, clicks: Vec3[], cursor: Vec3 | null, height: number, color: string ): Shape[] {
 	const marks: Shape[] = clicks.map( at => ( { type: 'mark', at } ) )
-	const g = geometryFromClicks( kind, cursor ? [ ...clicks, cursor ] : clicks, height, color )
+	const points = cursor ? [ ...clicks, cursor ] : clicks
+	// a polygon, rectangle or cuboid with only two points so far is still a line: its first side
+	if ( ( kind === 'polygon' || isRectangular( kind ) ) && points.length === 2 ) return [ ...marks, { type: 'line', points, color: color as ShapeColor } ]
+	const g = geometryFromClicks( kind, points, height, color )
 	if ( !g || kind === 'point' ) return marks
-	// a polygon with two corners is still a line
-	if ( kind === 'polygon' && g.points.length < 3 ) return [ ...marks, { type: 'line', points: g.points, color: g.color } ]
 	return [ ...marks, ...shapesOf( g ) ]
 }
+
+/** A rectangle's side lengths, e.g. "20.00 m × 10.00 m". */
+const sides = ( corners: Vec3[] ) => `${formatLength( distance( corners[0], corners[1] ) )} × ${formatLength( distance( corners[1], corners[2] ) )}`
 
 /** One line about a label's shape and size, e.g. "Cylinder · radius 3.00 m · height 8.00 m". */
 export function describeLabel( g: LabelGeometry ): string {
@@ -168,6 +200,8 @@ export function describeLabel( g: LabelGeometry ): string {
 		case 'point': return title
 		case 'polyline': return `${title} · ${formatLength( polylineLength( g.points ) )}`
 		case 'polygon': return `${title} · ${formatArea( polygonArea( g.points ) )}`
+		case 'rectangle': return `${title} · ${sides( g.points )}`
+		case 'cuboid': return `${title} · ${sides( g.points )} · height ${formatLength( g.height )}`
 		case 'wall': return `${title} · ${formatLength( polylineLength( g.points ) )} long · height ${formatLength( g.height )}`
 		case 'circle': case 'sphere': return `${title} · radius ${formatLength( g.radius )}`
 		case 'cylinder': case 'cone': return `${title} · radius ${formatLength( g.radius )} · height ${formatLength( g.height )}`

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { distance, ecefToGeodetic, enuBasis, geodeticToEcef, type Vec3 } from '@/geo/geometry'
-import { defaultName, describeLabel, draftShapes, geometryFromClicks, labelGeometry, labelInput, iconAnchor, shapesOf } from './labelShapes'
+import { defaultName, describeLabel, draftShapes, geometryFromClicks, labelGeometry, labelInput, iconAnchor, rectangleCorners, shapesOf } from './labelShapes'
 
 const base = geodeticToEcef( 113.26, 23.13, 10 )
 function at( e: number, n: number, u = 0 ): Vec3 {
@@ -83,5 +83,32 @@ describe( 'label shapes', () => {
 		expect( defaultName( 'point', labels ) ).toBe( 'Point 2' )
 		// Circle 1 was deleted after Circle 2 was added: two circles remain, and Circle 3 is taken
 		expect( defaultName( 'circle', [ { kind: 'circle', name: 'Circle 2' }, { kind: 'circle', name: 'Circle 3' } ] ) ).toBe( 'Circle 4' )
+	} )
+
+	it( 'a rectangle is flat at its first corner, one side through the second click and as wide as the third is from that side', () => {
+		// a side running east 20 m (the second click 3 m higher), and a third click 10 m north of it, a little off the corner
+		const corners = rectangleCorners( base, at( 20, 0, 3 ), at( 14, 10, -2 ) )
+		const expected = [ at( 0, 0 ), at( 20, 0 ), at( 20, 10 ), at( 0, 10 ) ]
+		corners.forEach( ( c, i ) => expect( distance( c, expected[i] ) ).toBeLessThan( 0.01 ) )
+		// a third click on the other side makes it grow the other way
+		expect( distance( rectangleCorners( base, at( 20, 0 ), at( 5, -4 ) )[2], at( 20, -4 ) ) ).toBeLessThan( 0.01 )
+	} )
+
+	it( 'rectangles and cuboids take three clicks, are saved as four corners and describe their sides', () => {
+		const clicks = [ base, at( 20, 0 ), at( 0, 10 ) ]
+		const rect = geometryFromClicks( 'rectangle', clicks, 6, '#ff0000' )!
+		expect( rect.points ).toHaveLength( 4 )
+		expect( describeLabel( rect ) ).toBe( 'Rectangle · 20.00 m × 10.00 m' )
+		expect( iconAnchor( rect ).standing ).toBe( false )
+		expect( labelInput( 1, '', null, rect ) ).not.toHaveProperty( 'height' )
+		const cuboid = geometryFromClicks( 'cuboid', clicks, 6, '#ff0000' )!
+		expect( describeLabel( cuboid ) ).toBe( 'Cuboid · 20.00 m × 10.00 m · height 6.00 m' )
+		expect( shapesOf( cuboid ) ).toEqual( [ { type: 'box', points: cuboid.points, height: 6, color: '#ff0000' } ] )
+		expect( distance( iconAnchor( cuboid ).at, at( 10, 5, 6 ) ) ).toBeLessThan( 0.01 )
+		expect( labelInput( 1, '', null, cuboid ) ).toMatchObject( { kind: 'cuboid', height: 6 } )
+		// while clicking: the first side is a line, then the whole shape follows the cursor
+		expect( draftShapes( 'cuboid', [ base ], at( 20, 0 ), 6, '#ff0000' ).map( s => s.type ) ).toEqual( [ 'mark', 'line' ] )
+		expect( draftShapes( 'cuboid', clicks.slice( 0, 2 ), at( 0, 10 ), 6, '#ff0000' ).map( s => s.type ) ).toEqual( [ 'mark', 'mark', 'box' ] )
+		expect( geometryFromClicks( 'rectangle', clicks.slice( 0, 2 ), 6, '#ff0000' ) ).toBeNull()
 	} )
 } )

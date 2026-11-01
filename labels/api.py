@@ -56,7 +56,8 @@ class LabelSerializer( ModelChildSerializerMixin, serializers.ModelSerializer ):
 		if kind in geometry.VERTEX_COUNTS:
 			fewest, most = geometry.VERTEX_COUNTS[ kind ]
 			if not fewest <= len( points ) <= most:
-				errors['points'] = f'A {kind} label takes {fewest} to {most} points.'
+				count = str( fewest ) if fewest == most else f'{fewest} to {most}'
+				errors['points'] = f'A {kind} label takes {count} points.'
 		elif points:
 			errors['points'] = f'A {kind} label has no points; its position is its centre.'
 		elif 'position' not in attrs:

@@ -15,6 +15,8 @@ export type Shape =
 	| { type: 'circle'; centre: Vec3; radius: number; color?: ShapeColor }
 	/** A vertical wall standing on a path, `height` metres tall. */
 	| { type: 'wall'; points: Vec3[]; height: number; color: ShapeColor }
+	/** A solid standing on a horizontal outline (e.g. a cuboid on a rectangle), `height` metres tall. */
+	| { type: 'box'; points: Vec3[]; height: number; color: ShapeColor }
 	| { type: 'sphere'; centre: Vec3; radius: number; color: ShapeColor }
 	/** An upright cylinder standing on `base`; a topRadius of 0 makes it a cone. */
 	| { type: 'cylinder'; base: Vec3; radius: number; topRadius: number; height: number; color: ShapeColor }

@@ -93,6 +93,18 @@ class LabelShapeTests( ModelTestBase ):
 		self.assertEqual( r.status_code, 201, r.data )
 		self.assertEqual( Label.objects.get().geometry.geom_type, 'LineString' )
 
+	def test_rectangle_and_cuboid_take_four_corners( self ):
+		corners = self.corners + [ { 'longitude': 113.26, 'latitude': 23.1302, 'height': 10 } ]
+		r = self.post( kind = 'rectangle', points = self.corners )
+		self.assertEqual( r.data['points'], [ 'A rectangle label takes 4 points.' ] )
+		r = self.post( kind = 'rectangle', points = corners )
+		self.assertEqual( r.status_code, 201, r.data )
+		self.assertEqual( Label.objects.get( pk = r.data['id'] ).geometry.geom_type, 'Polygon' )
+		self.assertEqual( r.data['points'], corners )
+		self.assertIn( 'height', self.post( kind = 'cuboid', points = corners ).data )
+		r = self.post( kind = 'cuboid', points = corners, height = 12 )
+		self.assertEqual( ( r.status_code, r.data['height'] ), ( 201, 12 ) )
+
 	def test_round_shapes_need_a_centre_and_their_sizes( self ):
 		centre = self.corners[0]
 		self.assertIn( 'radius', self.post( kind = 'sphere', position = centre ).data )

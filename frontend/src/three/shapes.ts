@@ -87,6 +87,20 @@ function wall( points: Vec3[], height: number, color: number, viewer: ModelViewe
 	return group
 }
 
+function box( points: Vec3[], height: number, color: number, viewer: ModelViewer ) {
+	// the sides are a wall around the closed outline; floor and roof are fans of the outline and its raised copy
+	const roof = points.map( p => above( p, height ) )
+	const group = wall( [ ...points, points[0] ], height, color, viewer )
+	for ( const ring of [ points, roof ] ) {
+		const local = ring.map( p => viewer.ecefToLocal( p ) )
+		const positions: number[] = []
+		for ( let i = 1; i < local.length - 1; i++ ) positions.push( ...local[0].toArray(), ...local[i].toArray(), ...local[i + 1].toArray() )
+		group.add( mesh( positions, solidMaterial( color ) ) )
+	}
+	for ( const p of points ) group.add( line( [ p, above( p, height ) ], color, viewer ) )
+	return group
+}
+
 /** A three.js geometry built along +Y, stood upright at an ECEF point (its centre). */
 function upright( geometry: BufferGeometry, centre: Vec3, color: number, viewer: ModelViewer ) {
 	const object = new Mesh( geometry, solidMaterial( color ) )
@@ -108,6 +122,7 @@ export function objectsFor( shape: Shape, viewer: ModelViewer ): Object3D[] {
 			return [ fill( ring, color, viewer ), line( [ ...ring, ring[0] ], color, viewer ) ]
 		}
 		case 'wall': return shape.points.length >= 2 ? [ wall( shape.points, shape.height, shapeColor( shape.color ), viewer ) ] : []
+		case 'box': return shape.points.length >= 3 ? [ box( shape.points, shape.height, shapeColor( shape.color ), viewer ) ] : []
 		case 'sphere': return [ upright( new SphereGeometry( shape.radius, 48, 24 ), shape.centre, shapeColor( shape.color ), viewer ) ]
 		case 'cylinder': {
 			const geometry = shape.topRadius > 0

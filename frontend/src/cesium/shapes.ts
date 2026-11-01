@@ -39,6 +39,12 @@ export function entityOptions( shape: Shape ): Cesium.Entity.ConstructorOptions 
 			return { wall: { positions: shape.points.map( cartesian ), minimumHeights: bottoms, maximumHeights: bottoms.map( h => h + shape.height ),
 				material: solid( shape.color ), outline: true, outlineColor: shapeColor( shape.color ) } }
 		}
+		case 'box': {
+			// an extruded polygon: its floor at the outline's height, its roof `height` above
+			const floor = heightOf( shape.points[0] )
+			return { polygon: { hierarchy: new Cesium.PolygonHierarchy( shape.points.map( cartesian ) ), height: floor, extrudedHeight: floor + shape.height,
+				material: solid( shape.color ), outline: true, outlineColor: shapeColor( shape.color ) } }
+		}
 		case 'sphere': {
 			const r = shape.radius
 			return { position: cartesian( shape.centre ), ellipsoid: { radii: new Cesium.Cartesian3( r, r, r ), material: solid( shape.color ) } }
