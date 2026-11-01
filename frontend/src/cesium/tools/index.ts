@@ -3,7 +3,6 @@ import { defineComponent, h, markRaw } from 'vue'
 import LabelEditor from '@/labels/LabelEditor.vue'
 import { defineTools } from '@/tools'
 import FlightTool from './FlightTool.vue'
-import HeightTool from './HeightTool.vue'
 import MeasureTool from './MeasureTool.vue'
 import ModePanel, { type ToolMode } from './ModePanel.vue'
 import SightlineTool from './SightlineTool.vue'
@@ -31,5 +30,4 @@ export const MAP_TOOLS = defineTools( [
 	{ id: 'labels', title: 'Labels', icon: 'labels', component: LabelEditor, editOnly: true },
 	{ id: 'viewer', title: 'Viewer', icon: 'viewer', component: ViewerTool },
 	{ id: 'analysis', title: 'Analysis', icon: 'analyze', component: AnalysisTool },
-	{ id: 'height', title: 'Height', icon: 'height', component: HeightTool, editOnly: true },
 ] )

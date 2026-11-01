@@ -9,7 +9,9 @@ import LabelPopup from '@/labels/LabelPopup.vue'
 import { labelHostKey } from '@/labels/labelHost'
 import { createLabelStore, labelStoreKey } from '@/labels/labelStore'
 import { cesiumLabelHost, drawLabels } from '@/cesium/labelLayer'
-import { createMapViewer, loadTileset, mapViewerKey, type MapViewerContext } from '@/cesium/mapViewer'
+import MapCornerControls from '@/cesium/MapCornerControls.vue'
+import { createMapViewer, currentPose, fromGeoPoint, loadTileset, mapViewerKey, poseOrientation, type MapViewerContext } from '@/cesium/mapViewer'
+import type { CameraPose } from '@/cesium/flightPathsApi'
 import { MAP_TOOLS } from '@/cesium/tools'
 import { MEMORY_LIMIT_MESSAGE } from '@/viewerChoice'
 import ToolDock from '@/components/ToolDock.vue'
@@ -26,6 +28,14 @@ const activeTool = ref<string | null>( null )
 const error = ref( '' )
 const toast = ref<{ message: string; kind: string } | null>( null )
 let toastTimer: number | undefined
+// the camera as it was once the model had loaded; Reset view flies back to it
+let home: CameraPose | null = null
+
+function resetView() {
+	const viewer = context.value?.viewer
+	if ( !viewer || !home ) return
+	viewer.camera.flyTo( { destination: fromGeoPoint( home.position ), orientation: poseOrientation( home ), duration: 1 } )
+}
 
 function notify( message: string, kind: 'info' | 'error' = 'info' ) {
 	toast.value = { message, kind }
@@ -56,6 +66,7 @@ onMounted( async () => {
 		removeLabels = drawLabels( viewer, labels )
 		void labels.reload()
 		tileset.value = await loadTileset( viewer, model.value.tileset_url, model.value.height_offset, () => notify( MEMORY_LIMIT_MESSAGE ) )
+		home = currentPose( viewer.camera )
 	} catch ( e ) {
 		error.value = e instanceof ApiError && e.status === 404 ? 'Model not found, or you do not have access to it.' : `Could not load the model: ${e instanceof Error ? e.message : e}`
 	}
@@ -77,6 +88,8 @@ onBeforeUnmount( () => {
 		<ToolDock v-if="context" v-model:active="activeTool" :tools="MAP_TOOLS" :model="model" />
 
 		<LabelPopup v-if="context" />
+
+		<MapCornerControls v-if="context" :reset-view="resetView" />
 
 		<div v-if="model" class="title">
 			<strong>{{ model.name }}</strong>
