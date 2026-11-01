@@ -33,6 +33,7 @@ export default defineConfig( ( { command } ) => {
 			proxy: {
 				'/api': backend,
 				'/media': backend,
+				'/label-icons': backend,
 				'/admin': backend,
 				'/static': backend,
 			},

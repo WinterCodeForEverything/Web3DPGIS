@@ -164,6 +164,10 @@ STATICFILES_DIRS = [ ( 'app', FRONTEND_DIST ) ] if FRONTEND_DIST.exists() else [
 MEDIA_ROOT = Path( env( 'MEDIA_ROOT' ) or BASE_DIR / 'media' )
 MEDIA_URL = '/media/'
 
+# Label icon images (the shared samples and users' uploads) live in assets/label-icons/ with local storage
+LABEL_ICON_ROOT = Path( env( 'LABEL_ICON_ROOT' ) or BASE_DIR / 'assets' / 'label-icons' )
+LABEL_ICON_URL = '/label-icons/'
+
 # Where uploads and generated 3D Tiles are kept:
 #   local  the media/ folder (one server; nginx or Django serves /media/)
 #   s3     an S3-compatible bucket (AWS S3, Aliyun OSS, Tencent COS, Cloudflare R2, SeaweedFS, MinIO …), so any
@@ -175,6 +179,10 @@ if STORAGE_BACKEND not in ( 'local', 's3' ):
 STORAGES = {
 	'default': { 'BACKEND': 'django.core.files.storage.FileSystemStorage' },
 	'staticfiles': { 'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage' },
+	'label_icons': {
+		'BACKEND': 'django.core.files.storage.FileSystemStorage',
+		'OPTIONS': { 'location': LABEL_ICON_ROOT, 'base_url': LABEL_ICON_URL },
+	},
 }
 if STORAGE_BACKEND == 's3':
 	STORAGES['default'] = {
@@ -197,6 +205,8 @@ if STORAGE_BACKEND == 's3':
 			'object_parameters': { 'CacheControl': 'public, max-age=86400' },
 		},
 	}
+	# label icons go to the bucket's public label/ prefix
+	STORAGES['label_icons'] = { **STORAGES['default'], 'OPTIONS': { **STORAGES['default']['OPTIONS'], 'location': 'label' } }
 # Prefixes browsers may read directly from the bucket; package/ (original uploads) stays private
 STORAGE_PUBLIC_PREFIXES = [ 'tiles/', 'image/', 'label/', 'Data/' ]
 # Origins allowed to fetch tiles from the bucket (CORS), e.g. https://3d.example.com

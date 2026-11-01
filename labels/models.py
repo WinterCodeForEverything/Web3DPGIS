@@ -1,12 +1,18 @@
 from django.conf import settings
 from django.contrib.gis.db import models
+from django.core.files.storage import storages
 from catalog.models import Model3D
+
+
+def label_icon_storage():
+	"""Where icon images are kept: assets/label-icons/ with local storage, the bucket's label/ prefix with S3 (settings.STORAGES)."""
+	return storages['label_icons']
 
 
 class LabelIcon( models.Model ):
 	"""An icon in the label library; icons without an owner are shared with everyone."""
 	name = models.CharField( max_length = 128, blank = True )
-	image = models.ImageField( upload_to = 'label' )
+	image = models.ImageField( storage = label_icon_storage )
 	owner = models.ForeignKey( settings.AUTH_USER_MODEL, related_name = 'label_icons', on_delete = models.CASCADE, null = True, blank = True )
 
 	def __str__( self ):

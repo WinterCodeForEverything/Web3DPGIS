@@ -3,6 +3,7 @@
 /api/v1/  JSON API (see api/urls.py), with OpenAPI docs at /api/docs/
 /admin/   Django admin
 /media/   uploaded files and generated 3D Tiles with local storage (served by nginx in production)
+/label-icons/  label icon images, from assets/label-icons/ with local storage (served by nginx in production)
 anything else: the Vue single-page app (frontend/)
 """
 
@@ -21,7 +22,8 @@ urlpatterns = [
 if settings.STORAGE_BACKEND == 'local':
 	# development convenience; in production nginx serves /media/ (or the bucket serves files with S3 storage)
 	urlpatterns += static( settings.MEDIA_URL, document_root = settings.MEDIA_ROOT )
+	urlpatterns += static( settings.LABEL_ICON_URL, document_root = settings.LABEL_ICON_ROOT )
 
 urlpatterns += [
-	re_path( r'^(?!api/|admin/|media/|static/)(?P<path>.*)$', views.serve_frontend, name = 'frontend' ),
+	re_path( r'^(?!api/|admin/|media/|static/|label-icons/)(?P<path>.*)$', views.serve_frontend, name = 'frontend' ),
 ]

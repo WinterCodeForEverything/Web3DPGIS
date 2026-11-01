@@ -3,25 +3,22 @@ import { Group } from 'three'
 import { watch, type ShallowRef } from 'vue'
 import type { Model3D } from '@/api/types'
 import type { Label } from '@/labels/labelsApi'
+import { iconUrlOf } from '@/labels/defaultIcon'
 import type { LabelHost } from '@/labels/labelHost'
 import { labelGeometry, nameAnchor, shapesOf } from '@/labels/labelShapes'
 import type { LabelStore } from '@/labels/labelStore'
 import type { ModelViewer } from './ModelViewer'
 import { html, LABEL_STYLE, objectsFor, removeShapes } from './shapes'
 
-function marker( iconUrl: string | null, color: string ): HTMLElement {
-	if ( iconUrl ) {
-		const img = document.createElement( 'img' )
-		img.src = iconUrl
-		img.style.cssText = 'width: 28px; height: 28px; display: block'
-		return img
-	}
-	const dot = document.createElement( 'div' )
-	dot.style.cssText = `width: 9px; height: 9px; border-radius: 50%; background: ${color}; border: 1px solid #000`
-	return dot
+function icon( url: string ): HTMLElement {
+	const img = document.createElement( 'img' )
+	img.src = url
+	img.alt = ''
+	img.style.cssText = 'width: 28px; height: 28px; display: block'
+	return img
 }
 
-// the look matches the map viewer's labels: white text on a dark box, above an icon or dot for point labels, always on top
+// the look matches the map viewer's labels: white text on a dark box, above the icon of a point label, always on top
 function labelElement( label: Label, onClick: () => void ): HTMLElement {
 	const el = document.createElement( 'div' )
 	el.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; pointer-events: auto'
@@ -31,7 +28,7 @@ function labelElement( label: Label, onClick: () => void ): HTMLElement {
 	text.textContent = label.name
 	text.style.cssText = LABEL_STYLE
 	el.append( text )
-	if ( label.kind === 'point' ) el.append( marker( label.icon_url, '#00bfff' ) )
+	if ( label.kind === 'point' ) el.append( icon( iconUrlOf( label ) ) )
 	else el.style.paddingBottom = '12px'
 	el.addEventListener( 'click', onClick )
 	// keep a press on a label from starting a camera drag

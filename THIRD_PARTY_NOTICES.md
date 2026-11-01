@@ -39,3 +39,10 @@ It uses the software below. Each keeps its own licence; versions are those pinne
 | three.js 0.186 | MIT |
 | 3d-tiles-renderer 0.5.3 | Apache-2.0 |
 | CesiumJS 1.146 | Apache-2.0 |
+| Tabler Icons (toolbar icons in `frontend/src/icons.ts`) | MIT |
+
+## Images
+
+| Image | Licence |
+| --- | --- |
+| Sample label icons in `assets/label-icons/` (`site`, `building`, `flag`, `warning`): [Twemoji](https://github.com/jdecked/twemoji) 15.1, © Twitter, Inc and other contributors | [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) |

@@ -1,4 +1,12 @@
+import os
+import shutil
+import tempfile
+from io import BytesIO
+
 from django.contrib.gis.geos import Point
+from django.core.files.storage import FileSystemStorage
+from django.core.management import call_command
+from PIL import Image
 from rest_framework.test import APIClient
 
 from catalog.testing import ModelTestBase
@@ -106,3 +114,41 @@ class LabelShapeTests( ModelTestBase ):
 
 	def test_invalid_colour( self ):
 		self.assertIn( 'color', self.post( position = self.corners[0], color = 'red' ).data )
+
+
+class LabelIconStorageTests( ModelTestBase ):
+	"""Icons are written to the label icon storage (assets/label-icons/ by default), here a temporary folder."""
+
+	def setUp( self ):
+		super().setUp()
+		self.root = tempfile.mkdtemp()
+		self.addCleanup( shutil.rmtree, self.root )
+		# the field resolves its storage once, when models load, so the test swaps it on the field itself
+		field = LabelIcon._meta.get_field( 'image' )
+		original = field.storage
+		field.storage = FileSystemStorage( location = self.root, base_url = '/label-icons/' )
+		self.addCleanup( setattr, field, 'storage', original )
+
+	def png( self ):
+		buffer = BytesIO()
+		Image.new( 'RGBA', ( 4, 4 ), ( 255, 0, 0, 255 ) ).save( buffer, 'PNG' )
+		buffer.seek( 0 )
+		buffer.name = 'my pin.png'
+		return buffer
+
+	def test_uploaded_icon_is_saved_in_the_icon_folder_and_served_from_label_icons( self ):
+		r = self.as_user( self.alice ).post( '/api/v1/label-icons/', { 'name': 'My pin', 'image': self.png() }, format = 'multipart' )
+		self.assertEqual( r.status_code, 201, r.data )
+		icon = LabelIcon.objects.get()
+		self.assertTrue( os.path.isfile( os.path.join( self.root, icon.image.name ) ) )
+		self.assertIn( '/label-icons/', r.data['image'] )
+		self.assertEqual( r.data['owner'], 'alice' )
+
+	def test_add_label_icons_shares_files_once( self ):
+		path = os.path.join( self.root, 'site.png' )
+		with open( path, 'wb' ) as f:
+			f.write( self.png().read() )
+		call_command( 'add_label_icons', path, stdout = open( os.devnull, 'w' ) )
+		call_command( 'add_label_icons', path, stdout = open( os.devnull, 'w' ) )
+		icon = LabelIcon.objects.get()
+		self.assertEqual( ( icon.name, icon.image.name, icon.owner ), ( 'site', 'site.png', None ) )

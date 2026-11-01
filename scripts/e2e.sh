@@ -17,6 +17,7 @@ PY="${PYTHON:-$ROOT/.venv/bin/python}"
 PORT="${E2E_PORT:-8799}"
 export POSTGRES_DB="${E2E_DB:-southcloud_e2e}"
 export MEDIA_ROOT="$( mktemp -d -t 3dpgis-e2e-media )"
+export LABEL_ICON_ROOT="$MEDIA_ROOT/label-icons"   # keep test uploads out of assets/
 export CELERY_BROKER_URL="${E2E_BROKER_URL:-redis://localhost:6379/15}"   # its own queue, away from development jobs
 export CELERY_TASK_ALWAYS_EAGER=false
 export STORAGE_BACKEND="${STORAGE_BACKEND:-local}"

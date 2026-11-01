@@ -2,6 +2,7 @@
 import * as Cesium from 'cesium'
 import { watch } from 'vue'
 import type { LabelHost } from '@/labels/labelHost'
+import { iconUrlOf } from '@/labels/defaultIcon'
 import { labelGeometry, nameAnchor, shapesOf } from '@/labels/labelShapes'
 import type { LabelStore } from '@/labels/labelStore'
 import { pickPoint, drawStyle, renderBriefly, toVec3, type MapViewerContext } from './mapViewer'
@@ -24,11 +25,11 @@ export function drawLabels( viewer: Cesium.Viewer, store: LabelStore ): () => vo
 			source.entities.add( {
 				id: `label-${label.id}`,
 				position: new Cesium.Cartesian3( ...nameAnchor( g ) ),
-				billboard: point && label.icon_url
-					? { image: label.icon_url, width: 28, height: 28, verticalOrigin: Cesium.VerticalOrigin.BOTTOM, disableDepthTestDistance: Number.POSITIVE_INFINITY }
+				// a point label is its icon, standing on the point; a shape shows just its name
+				billboard: point
+					? { image: iconUrlOf( label ), width: 28, height: 28, verticalOrigin: Cesium.VerticalOrigin.BOTTOM, disableDepthTestDistance: Number.POSITIVE_INFINITY }
 					: undefined,
-				point: point && !label.icon_url ? { ...drawStyle.point, color: Cesium.Color.DEEPSKYBLUE } : undefined,
-				label: { ...drawStyle.label, text: label.name, pixelOffset: new Cesium.Cartesian2( 0, point && label.icon_url ? -32 : -12 ) },
+				label: { ...drawStyle.label, text: label.name, pixelOffset: new Cesium.Cartesian2( 0, point ? -32 : -12 ) },
 			} )
 		}
 		renderBriefly( viewer )

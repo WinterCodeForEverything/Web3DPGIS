@@ -23,7 +23,7 @@ Browser ── Vue 3 app (frontend/) ──► /api/v1/ (Django REST Framework) 
 | `catalog/` | `Model3D` (owner, status, PostGIS `location`, tileset path), who may see a model, the models API with spatial search, file clean-up on delete |
 | `processing/` | Background job engine (`Job`, job kinds, Celery task, retries) and the tiling job: upload → 3D Tiles |
 | `reconstruction/` | Photos → 3D model: `Reconstruction`, `Photo`, the reconstructions API, the COLMAP + OpenMVS pipeline (`stages.py`) and its job, which hands the mesh to tiling |
-| `labels/` | `LabelIcon`, `Label` (a point, 2D shape or 3D shape: PostGIS position and vertices, radius, height, colour, JSON properties; see `labels/geometry.py`) and their API |
+| `labels/` | `LabelIcon` (images in `assets/label-icons/`, served at `/label-icons/`; `manage.py add_label_icons FILE…` shares icons with everyone), `Label` (a point, 2D shape or 3D shape: PostGIS position and vertices, radius, height, colour, JSON properties; see `labels/geometry.py`) and their API |
 | `viewer_tools/` | `FlightPath`, `FlightPoint` (camera poses), `Measurement` (PostGIS geometry), the measurement maths and their API |
 | `api/` | Puts the apps' own `api.py` modules together under `/api/v1/`; OpenAPI docs at `/api/docs/` |
 | `converters/` | Node command-line converters used by the tiling job |

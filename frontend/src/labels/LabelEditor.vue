@@ -5,6 +5,7 @@ import IconButton from '@/components/IconButton.vue'
 import type { Vec3 } from '@/geo/geometry'
 import { labelsApi } from '@/labels/labelsApi'
 import type { LabelIcon, LabelKind } from '@/labels/labelsApi'
+import { DEFAULT_ICON_URL } from './defaultIcon'
 import { labelHostKey } from './labelHost'
 import { DEFAULT_COLOR, KINDS, draftShapes, geometryFromClicks, kindInfo, labelInput } from './labelShapes'
 import { labelStoreKey } from './labelStore'
@@ -24,6 +25,7 @@ const color = ref( DEFAULT_COLOR )
 const height = ref( 10 )
 const placing = ref( false )
 const error = ref( '' )
+const uploading = ref( false )
 
 onMounted( async () => {
 	icons.value = ( await labelsApi.labelIcons() ).results
@@ -36,12 +38,18 @@ async function uploadIcon( e: Event ) {
 	const form = new FormData()
 	form.append( 'image', file )
 	form.append( 'name', file.name.replace( /\.[^.]+$/, '' ) )
+	error.value = ''
+	uploading.value = true
 	try {
 		const icon = await labelsApi.uploadLabelIcon( form )
 		icons.value.push( icon )
 		iconId.value = icon.id
 	} catch ( err ) {
 		error.value = err instanceof ApiError ? err.message : String( err )
+	} finally {
+		uploading.value = false
+		// choosing the same file again should upload it again
+		;( e.target as HTMLInputElement ).value = ''
 	}
 }
 
@@ -132,12 +140,17 @@ async function removeAll() {
 	<div v-if="kind === 'point'" class="field">
 		<span>Icon</span>
 		<div class="icons" role="radiogroup" aria-label="Icon">
-			<button class="icon" :class="{ on: iconId === null }" role="radio" :aria-checked="iconId === null" title="Dot" @click="iconId = null">●</button>
 			<button v-for="i in icons" :key="i.id" class="icon" :class="{ on: iconId === i.id }" role="radio" :aria-checked="iconId === i.id" :title="i.name" @click="iconId = i.id">
 				<img :src="i.image" :alt="i.name" />
 			</button>
+			<button class="icon" :class="{ on: iconId === null }" role="radio" :aria-checked="iconId === null" title="Default pin" @click="iconId = null">
+				<img :src="DEFAULT_ICON_URL" alt="Default pin" />
+			</button>
+			<label class="icon add" :class="{ busy: uploading }" title="Upload your own icon (PNG, JPEG, SVG…)">
+				+<input type="file" accept="image/*" aria-label="Upload your own icon" :disabled="uploading" @change="uploadIcon" />
+			</label>
 		</div>
-		<label class="muted small">Add icon <input type="file" accept="image/*" @change="uploadIcon" /></label>
+		<span class="muted small">Click + to upload your own icon; it is added to the list for your labels.</span>
 	</div>
 	<div v-else class="row">
 		<label class="field">Colour <input v-model="color" type="color" class="swatch" /></label>
@@ -156,6 +169,11 @@ async function removeAll() {
 .icons .icon { width: 40px; height: 40px; padding: 4px; justify-content: center; border-radius: var(--ds-rounded-md); }
 .icons .icon.on { border: 2px solid var(--ds-primary-focus); padding: 3px; }
 .icon img { max-width: 100%; max-height: 100%; }
+.icons .add { position: relative; display: inline-flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer;
+	border: 1px dashed var(--border); color: var(--muted); box-sizing: border-box; }
+.icons .add:hover { border-color: var(--accent); }
+.icons .add.busy { opacity: 0.5; cursor: progress; }
+.icons .add input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .swatch { width: 48px; height: 32px; padding: 2px; }
 .number { width: 90px; }
 .row { gap: 12px; align-items: flex-end; }
