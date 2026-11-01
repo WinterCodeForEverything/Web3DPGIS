@@ -4,6 +4,6 @@ import MeasurePanel from '@/measurements/MeasurePanel.vue'
 import { defineTools } from '@/tools'
 
 export const MODEL_TOOLS = defineTools( [
-	{ id: 'measure', title: 'Measure', icon: 'measure', component: MeasurePanel },
+	{ id: 'measure', title: 'Measurement', icon: 'measure', component: MeasurePanel },
 	{ id: 'labels', title: 'Labels', icon: 'labels', component: LabelEditor, editOnly: true },
 ] )

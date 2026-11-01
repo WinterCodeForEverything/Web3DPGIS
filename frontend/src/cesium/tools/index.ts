@@ -21,15 +21,15 @@ const ViewerTool = modeTool( 'Viewer mode', 'Choose a viewer mode: Flight or Wal
 	{ id: 'walk', title: 'Walk', icon: 'walk', component: WalkTool, hint: 'Walk on the model at eye height.' },
 ] )
 
-const AnalyzeTool = modeTool( 'Analysis', 'Choose an analysis: Sight line or Viewshed.', [
+const AnalysisTool = modeTool( 'Analysis', 'Choose an analysis: Sight line or Viewshed.', [
 	{ id: 'sightline', title: 'Sight line', icon: 'sightline', component: SightlineTool, hint: 'Can the observer see one target point?' },
 	{ id: 'viewshed', title: 'Viewshed', icon: 'viewshed', component: ViewshedTool, hint: 'What can the observer see across a field of view?' },
 ] )
 
 export const MAP_TOOLS = defineTools( [
-	{ id: 'measure', title: 'Measure', icon: 'measure', component: MeasureTool },
+	{ id: 'measure', title: 'Measurement', icon: 'measure', component: MeasureTool },
 	{ id: 'labels', title: 'Labels', icon: 'labels', component: LabelEditor, editOnly: true },
 	{ id: 'viewer', title: 'Viewer', icon: 'viewer', component: ViewerTool },
-	{ id: 'analyze', title: 'Analyze', icon: 'analyze', component: AnalyzeTool },
+	{ id: 'analysis', title: 'Analysis', icon: 'analyze', component: AnalysisTool },
 	{ id: 'height', title: 'Height', icon: 'height', component: HeightTool, editOnly: true },
 ] )

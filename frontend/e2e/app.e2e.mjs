@@ -125,7 +125,7 @@ try {
 	await page.click( '.popup button[aria-label=Close]' )
 
 	// measuring in the model viewer works like the map viewer's and saves to the same place
-	await clickText( 'Measure' )
+	await clickText( 'Measurement' )
 	await clickText( 'Distance' )
 	const savedMeasurements = () => page.evaluate( async () => ( await ( await fetch( `/api/v1/measurements/?model=${location.pathname.split( '/' )[2]}` ) ).json() ).results )
 	const stageClick = async ( dx, dy, button = 'left' ) => {
@@ -164,7 +164,7 @@ try {
 	await shot( '1-viewer.png' )
 
 	// 5. measuring
-	await clickText( 'Measure' )
+	await clickText( 'Measurement' )
 	await clickText( 'Distance' )
 	await canvasClick( -60, 20 ); await canvasClick( 0, -20 ); await canvasClick( 60, 20 ); await canvasClick( 60, 20, 'right' )
 	check( 'distance measurement', /^Distance: [\d.]+ m$/.test( await textOf( '.list li span' ) ), await textOf( '.list' ) )
@@ -192,7 +192,7 @@ try {
 	check( 'measurements saved', measurements.length === 4 && byKind.distance?.points.length === 3 && byKind.distance.results.segment_lengths_m.length === 2
 		&& byKind.area?.points.length === 3 && byKind.area.results.area_m2 > 0 && byKind.point?.points.length === 1, JSON.stringify( measurements.map( m => [ m.kind, m.points.length, m.results ] ) ) )
 	await page.click( '.panel button[aria-label="Close tool"]' )
-	await clickText( 'Measure' )
+	await clickText( 'Measurement' )
 	await sleep( 1000 )
 	check( 'nothing is loaded until a kind is chosen', ( await page.$$( '.list li' ) ).length === 0, await textOf( '.list' ) )
 	await clickText( 'Distance' )
@@ -232,6 +232,7 @@ try {
 	check( 'height offset saved', saved === 5, saved )
 
 	// 8. flight paths
+	await clickText( 'Viewer' )
 	await clickText( 'Flight' )
 	await clickText( 'Add current view' )
 	await page.mouse.move( 700, 450 ); await page.mouse.wheel( { deltaY: -400 } ); await sleep( 500 )
@@ -246,23 +247,25 @@ try {
 	await sleep( 5000 )
 
 	// 9. analysis tools
+	await clickText( 'Analysis' )
 	await clickText( 'Sight line' )
 	await canvasClick( -60, 40 ); await canvasClick( 60, -20 )
 	check( 'sight line result', /Visible|Blocked/.test( await textOf( '.list' ) ), await textOf( '.list' ) )
 	await clickText( 'Viewshed' )
 	await page.$eval( '.panel input[type=number][min="8"]', el => { el.value = '12'; el.dispatchEvent( new Event( 'input' ) ) } )
 	await canvasClick( -80, 60 ); await canvasClick( 40, -30 )
-	await page.waitForFunction( () => /sampled directions/.test( document.body.textContent ), { timeout: 90000 } ).catch( () => {} )
+	await page.waitForFunction( () => /\d+ of \d+ rays/.test( document.body.textContent ), { timeout: 90000 } ).catch( () => {} )
 	const viewshed = await page.evaluate( () => [ ...document.querySelectorAll( '.panel p' ) ].map( p => p.textContent ).join( ' ' ) )
-	check( 'viewshed analysis completes', /\d+ of \d+ sampled directions/.test( viewshed ), viewshed )
+	check( 'viewshed analysis completes', /\d+ of \d+ rays/.test( viewshed ), viewshed )
 	await shot( '3-viewshed.png' )
 
 	// 10. walk mode, and switching tools restores the normal camera
+	await clickText( 'Viewer' )
 	await clickText( 'Walk' )
 	await canvasClick( 0, 20 )
 	check( 'walk mode starts', ( await page.content() ).includes( 'Stop walking' ) )
 	await page.keyboard.down( 'w' ); await sleep( 600 ); await page.keyboard.up( 'w' )
-	await clickText( 'Measure' )
+	await clickText( 'Measurement' )
 	check( 'switching tools ends walk mode', !( await page.content() ).includes( 'Stop walking' ) )
 
 	// labels placed in the map viewer show in the model viewer too
