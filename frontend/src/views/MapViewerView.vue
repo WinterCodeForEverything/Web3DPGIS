@@ -11,6 +11,7 @@ import { createLabelStore, labelStoreKey } from '@/labels/labelStore'
 import { cesiumLabelHost, drawLabels } from '@/cesium/labelLayer'
 import { createMapViewer, loadTileset, mapViewerKey, type MapViewerContext } from '@/cesium/mapViewer'
 import { MAP_TOOLS } from '@/cesium/tools'
+import { MEMORY_LIMIT_MESSAGE } from '@/viewerChoice'
 import ToolDock from '@/components/ToolDock.vue'
 
 const props = defineProps<{ id: number }>()
@@ -54,7 +55,7 @@ onMounted( async () => {
 		context.value = { viewer, tileset, model: model as MapViewerContext['model'], notify }
 		removeLabels = drawLabels( viewer, labels )
 		void labels.reload()
-		tileset.value = await loadTileset( viewer, model.value.tileset_url, model.value.height_offset )
+		tileset.value = await loadTileset( viewer, model.value.tileset_url, model.value.height_offset, () => notify( MEMORY_LIMIT_MESSAGE ) )
 	} catch ( e ) {
 		error.value = e instanceof ApiError && e.status === 404 ? 'Model not found, or you do not have access to it.' : `Could not load the model: ${e instanceof Error ? e.message : e}`
 	}

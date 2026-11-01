@@ -19,6 +19,8 @@ export interface ModelViewerOptions {
 	heightOffset?: number
 	onProgress?: ( fraction: number ) => void
 	onReady?: () => void
+	/** The model needs more memory than the tile cache allows, so this view shows coarser tiles. Called once. */
+	onMemoryLimit?: () => void
 	onError?: ( message: string ) => void
 }
 
@@ -50,6 +52,9 @@ export class ModelViewer {
 	private fitted = false
 	private watchdog = 0
 	private wireframe = false
+	// between tiles-load-start and tiles-load-end
+	private loading = false
+	private memoryLimited = false
 	/** A camera move in progress (see focusOn), eased over FLIGHT_MS. */
 	private flight: { from: Vector3; to: Vector3; fromTarget: Vector3; toTarget: Vector3; start: number } | null = null
 
@@ -89,6 +94,7 @@ export class ModelViewer {
 		this.tiles.setCamera( this.camera )
 		this.tiles.addEventListener( 'load-root-tileset', this.onRootLoaded )
 		this.tiles.addEventListener( 'load-model', this.onModelLoaded )
+		this.tiles.addEventListener( 'tiles-load-start', this.onTilesLoadStart )
 		this.tiles.addEventListener( 'tiles-load-end', this.onTilesLoaded )
 		this.tiles.addEventListener( 'needs-update', this.invalidate )
 		this.tiles.addEventListener( 'load-error', this.onLoadError )
@@ -252,7 +258,9 @@ export class ModelViewer {
 		// damping and auto-rotation keep moving the camera after the pointer stops
 		if ( this.flight ) this.fly()
 		const moved = this.controls.update()
-		if ( !moved && !this.dirty ) return
+		// keep updating while tiles load: a tile that finishes into a full cache is dropped without a needs-update event,
+		// and only update() notices that loading is over (tiles-load-end)
+		if ( !moved && !this.dirty && !this.loading ) return
 		this.dirty = false
 		this.camera.updateMatrixWorld()
 		this.tiles.update()
@@ -294,8 +302,16 @@ export class ModelViewer {
 		if ( this.wireframe ) scene.traverse( object => this.applyWireframe( object ) )
 	}
 
+	private onTilesLoadStart = () => { this.loading = true }
+
 	private onTilesLoaded = () => {
+		this.loading = false
 		this.events.onProgress?.( 1 )
+		// tiles the view needed were refused, or dropped after loading, because the cache is full
+		if ( !this.memoryLimited && this.tiles.lruCache.isFull() ) {
+			this.memoryLimited = true
+			this.events.onMemoryLimit?.()
+		}
 		if ( this.fitted ) return
 		// the loaded geometry is tighter than the tileset's bounding volume: frame it and put the grid under it
 		const box = new Box3().setFromObject( this.tiles.group )

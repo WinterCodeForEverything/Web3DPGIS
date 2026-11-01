@@ -38,9 +38,20 @@ export function createMapViewer( container: HTMLElement, ionToken?: string ): Ce
 	return viewer
 }
 
-/** Load a tileset and lift it by heightOffset metres along the local vertical. */
-export async function loadTileset( viewer: Cesium.Viewer, url: string, heightOffset: number ): Promise<Cesium.Cesium3DTileset> {
+/**
+ * Load a tileset and lift it by heightOffset metres along the local vertical.
+ * onMemoryLimit is called once if the view needs more memory than the tile cache allows, so Cesium shows coarser tiles.
+ */
+export async function loadTileset( viewer: Cesium.Viewer, url: string, heightOffset: number, onMemoryLimit?: () => void ): Promise<Cesium.Cesium3DTileset> {
 	const tileset = await Cesium.Cesium3DTileset.fromUrl( url )
+	// Cesium raises the screen-space error it aims for until the tiles fit in cacheBytes + maximumCacheOverflowBytes
+	const removeListener = tileset.allTilesLoaded.addEventListener( () => {
+		// memoryAdjustedScreenSpaceError is public in Cesium but missing from its type definitions
+		const adjusted = ( tileset as Cesium.Cesium3DTileset & { memoryAdjustedScreenSpaceError: number } ).memoryAdjustedScreenSpaceError
+		if ( adjusted <= tileset.maximumScreenSpaceError ) return
+		removeListener()
+		onMemoryLimit?.()
+	} )
 	viewer.scene.primitives.add( tileset )
 	setHeightOffset( tileset, heightOffset )
 	await viewer.zoomTo( tileset, new Cesium.HeadingPitchRange( 0, -0.5, tileset.boundingSphere.radius * 2.5 ) )

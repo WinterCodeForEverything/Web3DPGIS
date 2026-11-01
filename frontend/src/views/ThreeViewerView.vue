@@ -10,6 +10,7 @@ import { measureHostKey } from '@/measurements/measureHost'
 import { drawLabels, threeLabelHost } from '@/three/labelLayer'
 import { threeMeasureHost } from '@/three/measuring'
 import { ModelViewer } from '@/three/ModelViewer'
+import { MEMORY_LIMIT_MESSAGE } from '@/viewerChoice'
 import { MODEL_TOOLS } from '@/three/tools'
 import IconButton from '@/components/IconButton.vue'
 import ToolDock from '@/components/ToolDock.vue'
@@ -55,6 +56,7 @@ onMounted( async () => {
 			heightOffset: model.value.height_offset,
 			onProgress: fraction => { progress.value = fraction },
 			onReady: () => { ready.value = true },
+			onMemoryLimit: () => notify( MEMORY_LIMIT_MESSAGE ),
 			onError: message => { error.value = `Could not load the model: ${message}` },
 		} )
 		removeLabels = drawLabels( viewer.value, labels )
