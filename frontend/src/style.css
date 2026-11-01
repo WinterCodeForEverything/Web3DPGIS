@@ -169,6 +169,14 @@ button.small, .button.small { padding: 3px 8px; font-size: 13px; }
 .model-page .list button.item:active:not(:disabled) { transform: none; }
 .model-page .list > li.selected { margin: 0 -12px; padding-left: 9px; padding-right: 12px; border-left: 3px solid var(--ds-primary); }
 .model-page .list > li.selected button.item { color: var(--ds-primary); }
+/* grouped settings (viewshed, sight line): name on the left, value and unit lined up on the right, hairlines between rows */
+.model-page .settings { margin: 0; padding: 0 12px; border-radius: var(--ds-rounded-md); background: var(--ds-parchment); font-size: 14px; }
+.model-page .settings > label { display: grid; grid-template-columns: 1fr 76px 22px; align-items: center; gap: 8px; min-height: 40px; }
+.model-page .settings > label + label { border-top: 1px solid var(--ds-hairline); }
+.model-page .settings > label > .unit { color: var(--muted); font-size: 13px; }
+.model-page .panel .settings input:not([type='checkbox']):not([type='range']) { width: 100%; box-sizing: border-box; padding: 4px 8px; text-align: right;
+	font-variant-numeric: tabular-nums; background: var(--ds-pearl); }
+.model-page .settings-note { margin-top: -4px; font-size: 13px; }
 /* small icon-only button inside a row */
 .model-page .panel button.icon-only { width: 26px; height: 26px; padding: 0; justify-content: center; border: none; border-radius: 50%; background: transparent; color: var(--muted); }
 .model-page .panel button.icon-only:hover:not(:disabled) { background: var(--ds-hairline); color: var(--danger); }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import * as Cesium from 'cesium'
-import { inject, onUnmounted, ref } from 'vue'
+import { computed, inject, onUnmounted, ref, shallowRef } from 'vue'
 import { pickPoint, drawStyle, mapViewerKey } from '../mapViewer'
 import { firstHit, raiseAboveSurface } from '../lineOfSight'
 import { createSession } from '../toolSession'
@@ -18,7 +18,9 @@ const columns = ref( 48 )
 const rows = ref( 12 )
 const progress = ref<number | null>( null )
 const summary = ref( '' )
-let observer: Cesium.Cartesian3 | null = null
+const running = computed( () => progress.value !== null )
+// the observer, between the first click and the second
+const observer = shallowRef<Cesium.Cartesian3 | null>( null )
 let cancelled = false
 
 const visibleDots = session.addPrimitive( new Cesium.PointPrimitiveCollection() )
@@ -51,7 +53,7 @@ async function analyse( from: Cesium.Cartesian3, towards: Cesium.Cartesian3 ) {
 		scene.requestRender()
 		await new Promise( r => requestAnimationFrame( r ) )   // keep the page responsive
 	}
-	summary.value = cancelled ? 'Stopped.' : `${seen} of ${total} sampled directions hit a visible surface within ${range.value} m.`
+	summary.value = cancelled ? 'Stopped.' : `${seen} of ${total} rays (${Math.round( ( 100 * seen ) / total )}%) reach a visible surface within ${range.value} m.`
 	progress.value = null
 }
 
@@ -60,20 +62,26 @@ handler.setInputAction( ( e: { position: Cesium.Cartesian2 } ) => {
 	if ( progress.value !== null ) return
 	const p = pickPoint( viewer, e.position )
 	if ( !p ) return
-	if ( !observer ) {
-		session.entities.removeAll()
-		visibleDots.removeAll()
-		summary.value = ''
-		observer = raiseAboveSurface( p, eyeHeight.value )
-		session.entities.add( { position: observer, point: { ...drawStyle.point, color: Cesium.Color.DEEPSKYBLUE } } )
+	if ( !observer.value ) {
+		clear()
+		observer.value = raiseAboveSurface( p, eyeHeight.value )
+		session.entities.add( { position: observer.value, point: { ...drawStyle.point, color: Cesium.Color.DEEPSKYBLUE } } )
 	} else {
-		const from = observer
-		observer = null
+		const from = observer.value
+		observer.value = null
 		session.entities.add( { polyline: { positions: [ from, p ], width: 1, material: Cesium.Color.DEEPSKYBLUE } } )
 		void analyse( from, p )
 	}
 	scene.requestRender()
 }, Cesium.ScreenSpaceEventType.LEFT_CLICK )
+
+function clear() {
+	session.entities.removeAll()
+	visibleDots.removeAll()
+	summary.value = ''
+	observer.value = null
+	scene.requestRender()
+}
 
 onUnmounted( () => {
 	cancelled = true
@@ -82,20 +90,27 @@ onUnmounted( () => {
 </script>
 
 <template>
-	<p class="muted">Click the observer's position, then click in the direction they look. Green dots mark surfaces they can see.</p>
-	<label class="row small">Eye height <input v-model.number="eyeHeight" type="number" min="0" step="0.1" style="width: 70px" /> m</label>
-	<label class="row small">Range <input v-model.number="range" type="number" min="10" step="10" style="width: 80px" /> m</label>
-	<label class="row small">Field of view <input v-model.number="fov" type="number" min="10" max="360" step="5" style="width: 70px" /> °</label>
-	<label class="row small">Samples <input v-model.number="columns" type="number" min="8" max="180" style="width: 60px" /> × <input v-model.number="rows" type="number" min="3" max="40" style="width: 55px" /></label>
-	<div v-if="progress !== null" class="row">
-		<div class="progress" style="flex: 1"><div :style="{ width: progress * 100 + '%' }" /></div>
+	<p class="muted">{{ observer ? 'Now click in the direction the observer looks.' : 'Click where the observer stands.' }} Green dots mark surfaces they can see.</p>
+	<fieldset class="settings" :disabled="running">
+		<label><span>Eye height</span><input v-model.number="eyeHeight" type="number" min="0" step="0.1" /><span class="unit">m</span></label>
+		<label><span>Range</span><input v-model.number="range" type="number" min="10" step="10" /><span class="unit">m</span></label>
+		<label><span>Field of view</span><input v-model.number="fov" type="number" min="10" max="360" step="5" /><span class="unit">°</span></label>
+		<label><span>Rays across</span><input v-model.number="columns" type="number" min="8" max="180" /><span class="unit" /></label>
+		<label><span>Rays up and down</span><input v-model.number="rows" type="number" min="3" max="40" /><span class="unit" /></label>
+	</fieldset>
+	<p class="muted settings-note">{{ columns * rows }} rays in all, from 60° below to 15° above level.</p>
+	<div v-if="running" class="row">
+		<div class="progress" style="flex: 1"><div :style="{ width: progress! * 100 + '%' }" /></div>
+		<span class="muted small">{{ Math.round( progress! * 100 ) }}%</span>
 		<button class="small" @click="cancelled = true">Stop</button>
 	</div>
 	<p v-if="summary" class="small">{{ summary }}</p>
-	<button class="small" @click="session.entities.removeAll(); visibleDots.removeAll(); summary = ''; viewer.scene.requestRender()">Clear</button>
+	<button v-if="!running && ( summary || observer )" class="small" @click="clear">Clear</button>
 </template>
 
 <style scoped>
 p { margin: 0; font-size: 14px; }
 .small { font-size: 13px; }
+fieldset { border: none; min-width: 0; }
+fieldset:disabled { opacity: 0.6; }
 </style>
