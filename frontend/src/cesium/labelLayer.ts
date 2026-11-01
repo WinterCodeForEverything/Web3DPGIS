@@ -3,12 +3,13 @@ import * as Cesium from 'cesium'
 import { watch } from 'vue'
 import type { LabelHost } from '@/labels/labelHost'
 import { iconUrlOf } from '@/labels/defaultIcon'
-import { labelGeometry, nameAnchor, shapesOf } from '@/labels/labelShapes'
+import { iconAnchor, labelGeometry, shapesOf } from '@/labels/labelShapes'
 import type { LabelStore } from '@/labels/labelStore'
 import { pickPoint, drawStyle, renderBriefly, toVec3, type MapViewerContext } from './mapViewer'
 import { entityOptions } from './shapes'
 
-// every entity of a label has an id starting with label-<id>: its name is label-<id>, its shape parts label-<id>/<n>
+// every entity of a label has an id starting with label-<id>: its icon and name are label-<id>, its shape parts label-<id>/<n>
+const ICON_SIZE = 28
 const LABEL_ID = /^label-(\d+)(\/|$)/
 
 /** Draw the store's labels and select one when any part of it is clicked. Returns a function that removes them. */
@@ -21,15 +22,17 @@ export function drawLabels( viewer: Cesium.Viewer, store: LabelStore ): () => vo
 		for ( const label of store.labels.value ) {
 			const g = labelGeometry( label )
 			shapesOf( g ).forEach( ( shape, n ) => source.entities.add( { ...entityOptions( shape ), id: `label-${label.id}/${n}` } ) )
-			const point = label.kind === 'point'
+			// the icon stands on a point label's point and a 3D shape's top centre, and is centred on a 2D shape's middle
+			const { at, standing } = iconAnchor( g )
 			source.entities.add( {
 				id: `label-${label.id}`,
-				position: new Cesium.Cartesian3( ...nameAnchor( g ) ),
-				// a point label is its icon, standing on the point; a shape shows just its name
-				billboard: point
-					? { image: iconUrlOf( label ), width: 28, height: 28, verticalOrigin: Cesium.VerticalOrigin.BOTTOM, disableDepthTestDistance: Number.POSITIVE_INFINITY }
-					: undefined,
-				label: { ...drawStyle.label, text: label.name, pixelOffset: new Cesium.Cartesian2( 0, point ? -32 : -12 ) },
+				position: new Cesium.Cartesian3( ...at ),
+				billboard: {
+					image: iconUrlOf( label ), width: ICON_SIZE, height: ICON_SIZE, disableDepthTestDistance: Number.POSITIVE_INFINITY,
+					verticalOrigin: standing ? Cesium.VerticalOrigin.BOTTOM : Cesium.VerticalOrigin.CENTER,
+				},
+				// the name sits just above the icon
+				label: { ...drawStyle.label, text: label.name, pixelOffset: new Cesium.Cartesian2( 0, -( standing ? ICON_SIZE : ICON_SIZE / 2 ) - 4 ) },
 			} )
 		}
 		renderBriefly( viewer )

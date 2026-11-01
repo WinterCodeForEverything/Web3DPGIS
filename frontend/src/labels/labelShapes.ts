@@ -4,7 +4,7 @@ import type { IconName } from '@/icons'
 import type { GeoPoint } from '@/api/types'
 import type { Label, LabelInput, LabelKind } from '@/labels/labelsApi'
 import {
-	boundsCentre, distance, ecefToGeodetic, enuBasis, formatArea, formatLength, geodeticToEcef, midpoint, polygonArea, polylineLength,
+	boundsCentre, distance, ecefToGeodetic, enuBasis, formatArea, formatLength, geodeticToEcef, polygonArea, polylineLength,
 	triangle, type Vec3,
 } from '@/geo/geometry'
 import type { Shape, ShapeColor } from '@/geo/shapes'
@@ -85,7 +85,7 @@ export function geometryFromClicks( kind: LabelKind, clicks: Vec3[], height: num
 
 /** What to send to the API to save a finished label. */
 export function labelInput( model: number, name: string, icon: number | null, g: LabelGeometry ): LabelInput {
-	const input: LabelInput = { model, kind: g.kind, name: name.trim() || kindInfo( g.kind ).title, icon: g.kind === 'point' ? icon : null }
+	const input: LabelInput = { model, kind: g.kind, name: name.trim() || kindInfo( g.kind ).title, icon }
 	if ( g.points.length ) input.points = g.points.map( toGeo )
 	else input.position = toGeo( g.position )
 	if ( g.kind !== 'point' ) input.color = g.color
@@ -94,14 +94,33 @@ export function labelInput( model: number, name: string, icon: number | null, g:
 	return input
 }
 
-/** Where a label's name goes: above the top of a shape, so it is not hidden inside it. */
-export function nameAnchor( g: LabelGeometry ): Vec3 {
+/** The point halfway along a path, measured along its segments. */
+export function halfwayAlong( points: Vec3[] ): Vec3 {
+	let left = polylineLength( points ) / 2
+	for ( let i = 1; i < points.length; i++ ) {
+		const a = points[i - 1], b = points[i], d = distance( a, b )
+		if ( left <= d && d > 0 ) {
+			const t = left / d
+			return [ a[0] + ( b[0] - a[0] ) * t, a[1] + ( b[1] - a[1] ) * t, a[2] + ( b[2] - a[2] ) * t ]
+		}
+		left -= d
+	}
+	return points[points.length - 1]
+}
+
+/**
+ * Where a label's icon (with its name above it) goes. A point label's icon and a 3D shape's stand on the point (the
+ * point itself, or the top centre of the shape); a 2D shape's is centred on the middle of the shape.
+ */
+export function iconAnchor( g: LabelGeometry ): { at: Vec3; standing: boolean } {
 	switch ( g.kind ) {
-		case 'point': case 'circle': case 'polygon': return g.position
-		case 'polyline': return g.points.length === 2 ? midpoint( g.points[0], g.points[1] ) : g.points[Math.floor( g.points.length / 2 )]
-		case 'wall': return above( g.position, g.height )
-		case 'sphere': return above( g.position, g.radius )
-		case 'cylinder': case 'cone': return above( g.position, g.height )
+		case 'point': return { at: g.position, standing: true }
+		case 'polyline': return { at: halfwayAlong( g.points ), standing: false }
+		case 'polygon': return { at: boundsCentre( g.points ), standing: false }
+		case 'circle': return { at: g.position, standing: false }
+		case 'wall': return { at: above( halfwayAlong( g.points ), g.height ), standing: true }
+		case 'sphere': return { at: above( g.position, g.radius ), standing: true }
+		case 'cylinder': case 'cone': return { at: above( g.position, g.height ), standing: true }
 	}
 }
 

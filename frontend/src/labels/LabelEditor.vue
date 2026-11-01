@@ -10,14 +10,16 @@ import { labelHostKey } from './labelHost'
 import { DEFAULT_COLOR, KINDS, draftShapes, geometryFromClicks, kindInfo, labelInput } from './labelShapes'
 import { labelStoreKey } from './labelStore'
 
-// Place labels on the model (owner only): points, 2D shapes and 3D shapes. Works in any viewer that provides a LabelHost;
-// each label is saved as soon as its last point is clicked.
+// Place labels on the model (owner only): points, 2D shapes and 3D shapes, each with an icon (on the point, at the centre
+// of a 2D shape, on top of a 3D one). Works in any viewer that provides a LabelHost; a label is saved as soon as its
+// last point is clicked.
 const host = inject( labelHostKey )!
 const store = inject( labelStoreKey )!
 
 const GROUPS = [ 'Point', '2D', '3D' ] as const
 const kind = ref<LabelKind>( 'point' )
 const info = computed( () => kindInfo( kind.value ) )
+const iconWhere = computed( () => ( { Point: 'on the point', '2D': 'at the centre of the shape', '3D': 'on top of the shape' } )[ info.value.group ] )
 const icons = ref<LabelIcon[]>( [] )
 const iconId = ref<number | null>( null )
 const name = ref( '' )
@@ -137,8 +139,8 @@ async function removeAll() {
 	<label class="field">Label text
 		<input v-model="name" placeholder="e.g. Main entrance" maxlength="128" />
 	</label>
-	<div v-if="kind === 'point'" class="field">
-		<span>Icon</span>
+	<div class="field">
+		<span>Icon <span class="muted small">{{ iconWhere }}</span></span>
 		<div class="icons" role="radiogroup" aria-label="Icon">
 			<button v-for="i in icons" :key="i.id" class="icon" :class="{ on: iconId === i.id }" role="radio" :aria-checked="iconId === i.id" :title="i.name" @click="iconId = i.id">
 				<img :src="i.image" :alt="i.name" />
@@ -152,7 +154,7 @@ async function removeAll() {
 		</div>
 		<span class="muted small">Click + to upload your own icon; it is added to the list for your labels.</span>
 	</div>
-	<div v-else class="row">
+	<div v-if="kind !== 'point'" class="row">
 		<label class="field">Colour <input v-model="color" type="color" class="swatch" /></label>
 		<label v-if="info.hasHeight" class="field">Height (m) <input v-model.number="height" type="number" min="0.1" step="0.5" class="number" /></label>
 	</div>

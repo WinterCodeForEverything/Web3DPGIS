@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { distance, ecefToGeodetic, enuBasis, geodeticToEcef, type Vec3 } from '@/geo/geometry'
-import { describeLabel, draftShapes, geometryFromClicks, labelGeometry, labelInput, nameAnchor, shapesOf } from './labelShapes'
+import { describeLabel, draftShapes, geometryFromClicks, labelGeometry, labelInput, iconAnchor, shapesOf } from './labelShapes'
 
 const base = geodeticToEcef( 113.26, 23.13, 10 )
 function at( e: number, n: number, u = 0 ): Vec3 {
@@ -20,9 +20,20 @@ describe( 'label shapes', () => {
 		expect( shapesOf( g ) ).toEqual( [] )
 	} )
 
-	it( 'an unnamed shape is named after its kind, and a shape has no icon', () => {
+	it( 'an unnamed shape is named after its kind, and keeps its icon', () => {
 		const g = geometryFromClicks( 'polygon', [ at( 0, 0 ), at( 10, 0 ), at( 10, 10 ) ], 10, '#00ff00' )!
-		expect( labelInput( 7, '', 3, g ) ).toMatchObject( { name: 'Polygon', icon: null, color: '#00ff00' } )
+		expect( labelInput( 7, '', 3, g ) ).toMatchObject( { name: 'Polygon', icon: 3, color: '#00ff00' } )
+	} )
+
+	it( 'a 2D shape has its icon centred on its middle; a 3D shape has it standing on its top centre', () => {
+		const line = geometryFromClicks( 'polyline', [ at( 0, 0 ), at( 10, 0 ), at( 10, 30 ) ], 10, '#000000' )!
+		expect( iconAnchor( line ).standing ).toBe( false )
+		expect( distance( iconAnchor( line ).at, at( 10, 10 ) ) ).toBeLessThan( 1e-6 )   // 20 m along a 40 m path
+		const square = geometryFromClicks( 'polygon', [ at( 0, 0 ), at( 10, 0 ), at( 10, 10 ), at( 0, 10 ) ], 10, '#000000' )!
+		expect( distance( iconAnchor( square ).at, at( 5, 5 ) ) ).toBeLessThan( 0.01 )
+		const wall = geometryFromClicks( 'wall', [ at( 0, 0 ), at( 20, 0 ), at( 20, 20 ) ], 6, '#000000' )!
+		expect( iconAnchor( wall ) ).toMatchObject( { standing: true } )
+		expect( distance( iconAnchor( wall ).at, at( 20, 0, 6 ) ) ).toBeLessThan( 0.01 )   // top of the wall, halfway along it
 	} )
 
 	it( 'vertex shapes send their points and leave the name position to the server', () => {
@@ -43,12 +54,12 @@ describe( 'label shapes', () => {
 		expect( labelInput( 1, '', null, geometryFromClicks( 'sphere', clicks, 10, '#000000' )! ) ).not.toHaveProperty( 'height' )
 	} )
 
-	it( 'a cone is a cylinder with no top, and names sit above the tops of 3D shapes', () => {
+	it( 'a cone is a cylinder with no top, and icons stand on the tops of 3D shapes', () => {
 		const cone = geometryFromClicks( 'cone', [ base, at( 2, 0 ) ], 8, '#123456' )!
 		expect( shapesOf( cone ) ).toEqual( [ { type: 'cylinder', base, radius: cone.radius, topRadius: 0, height: 8, color: '#123456' } ] )
-		expect( heightOf( nameAnchor( cone ) ) ).toBeCloseTo( 18, 3 )
+		expect( heightOf( iconAnchor( cone ).at ) ).toBeCloseTo( 18, 3 )
 		const sphere = geometryFromClicks( 'sphere', [ base, at( 0, 0, 4 ) ], 8, '#123456' )!
-		expect( heightOf( nameAnchor( sphere ) ) ).toBeCloseTo( 14, 3 )
+		expect( heightOf( iconAnchor( sphere ).at ) ).toBeCloseTo( 14, 3 )
 	} )
 
 	it( 'a saved label reads back from longitude/latitude into the same geometry', () => {

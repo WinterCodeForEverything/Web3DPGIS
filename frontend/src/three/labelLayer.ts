@@ -5,7 +5,7 @@ import type { Model3D } from '@/api/types'
 import type { Label } from '@/labels/labelsApi'
 import { iconUrlOf } from '@/labels/defaultIcon'
 import type { LabelHost } from '@/labels/labelHost'
-import { labelGeometry, nameAnchor, shapesOf } from '@/labels/labelShapes'
+import { iconAnchor, labelGeometry, shapesOf } from '@/labels/labelShapes'
 import type { LabelStore } from '@/labels/labelStore'
 import type { ModelViewer } from './ModelViewer'
 import { html, LABEL_STYLE, objectsFor, removeShapes } from './shapes'
@@ -18,18 +18,17 @@ function icon( url: string ): HTMLElement {
 	return img
 }
 
-// the look matches the map viewer's labels: white text on a dark box, above the icon of a point label, always on top
+// the look matches the map viewer's labels: the icon, with white text on a dark box just above it, always on top.
+// The element is the icon's size and the name hangs above it, so placing the element places the icon exactly.
 function labelElement( label: Label, onClick: () => void ): HTMLElement {
 	const el = document.createElement( 'div' )
-	el.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; pointer-events: auto'
+	el.style.cssText = 'position: relative; width: 28px; height: 28px; cursor: pointer; pointer-events: auto'
 	el.className = 'model-label'
 	el.dataset.labelId = String( label.id )
 	const text = document.createElement( 'span' )
 	text.textContent = label.name
-	text.style.cssText = LABEL_STYLE
-	el.append( text )
-	if ( label.kind === 'point' ) el.append( icon( iconUrlOf( label ) ) )
-	else el.style.paddingBottom = '12px'
+	text.style.cssText = `${LABEL_STYLE}; position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%)`
+	el.append( icon( iconUrlOf( label ) ), text )
 	el.addEventListener( 'click', onClick )
 	// keep a press on a label from starting a camera drag
 	el.addEventListener( 'pointerdown', e => e.stopPropagation() )
@@ -48,8 +47,10 @@ export function drawLabels( viewer: ModelViewer, store: LabelStore ): () => void
 		for ( const label of store.labels.value ) {
 			const g = labelGeometry( label )
 			for ( const shape of shapesOf( g ) ) group.add( ...objectsFor( shape, viewer ) )
-			// the bottom of the name (and of a point label's icon) sits on the point, like a Cesium billboard with verticalOrigin BOTTOM
-			group.add( html( labelElement( label, () => { store.selected.value = label } ), nameAnchor( g ), viewer, true ) )
+			// the icon stands on a point label's point and a 3D shape's top centre (like a Cesium billboard with verticalOrigin
+			// BOTTOM), and is centred on a 2D shape's middle
+			const { at, standing } = iconAnchor( g )
+			group.add( html( labelElement( label, () => { store.selected.value = label } ), at, viewer, standing ) )
 		}
 		viewer.scene.add( group )
 		viewer.requestRender()
