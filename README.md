@@ -23,7 +23,7 @@ Browser ── Vue 3 app (frontend/) ──► /api/v1/ (Django REST Framework) 
 | `catalog/` | `Model3D` (owner, status, PostGIS `location`, tileset path), who may see a model, the models API with spatial search, file clean-up on delete |
 | `processing/` | Background job engine (`Job`, job kinds, Celery task, retries) and the tiling job: upload → 3D Tiles |
 | `reconstruction/` | Photos → 3D model: `Reconstruction`, `Photo`, the reconstructions API, the COLMAP + OpenMVS pipeline (`stages.py`) and its job, which hands the mesh to tiling |
-| `labels/` | `LabelIcon`, `Label` (PostGIS point + JSON properties) and their API |
+| `labels/` | `LabelIcon`, `Label` (a point, 2D shape or 3D shape: PostGIS position and vertices, radius, height, colour, JSON properties; see `labels/geometry.py`) and their API |
 | `viewer_tools/` | `FlightPath`, `FlightPoint` (camera poses), `Measurement` (PostGIS geometry), the measurement maths and their API |
 | `api/` | Puts the apps' own `api.py` modules together under `/api/v1/`; OpenAPI docs at `/api/docs/` |
 | `converters/` | Node command-line converters used by the tiling job |
@@ -35,11 +35,11 @@ so database tables and migration history did not change when the folders were re
 | `frontend/src/` | What it holds |
 |---|---|
 | `views/` | Pages: model list, upload, login, and `ViewerSwitchPage` which opens a model in `ThreeViewerView` (default) or `MapViewerView` |
-| `three/` | The three.js 3D model viewer (`ModelViewer.ts`), its tool list (`tools/`) and its label and measuring drawing |
-| `cesium/` | The Cesium map viewer (`mapViewer.ts`), its GIS tools and tool list (`tools/`), tool sessions, line of sight, label and measuring drawing, flight paths API |
-| `labels/` | Labels shared by both viewers: store, editor, popup, API, and the `LabelHost` each viewer provides |
+| `three/` | The three.js 3D model viewer (`ModelViewer.ts`), its tool list (`tools/`), its label and measuring drawing, and `shapes.ts`, which draws the shared shapes |
+| `cesium/` | The Cesium map viewer (`mapViewer.ts`), its GIS tools and tool list (`tools/`), tool sessions, line of sight, label and measuring drawing, `shapes.ts` (the shared shapes as entities), flight paths API |
+| `labels/` | Labels shared by both viewers: store, editor, popup, API, the label kinds and their geometry (`labelShapes.ts`), and the `LabelHost` each viewer provides |
 | `measurements/` | Measuring shared by both viewers: panel, shapes, API, and the `MeasureHost` each viewer provides |
-| `geo/` | Measurement maths on Earth-centred points (no Cesium), used by both viewers |
+| `geo/` | Maths on Earth-centred points (no Cesium), and `shapes.ts`, the shapes measurements and labels ask the viewers to draw |
 | `components/` | `ToolDock`: the toolbar and tool panel every viewer uses |
 | `api/` | HTTP client (`http.ts`), shared types, and the auth and models/jobs API |
 

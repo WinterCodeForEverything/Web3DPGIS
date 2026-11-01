@@ -1,15 +1,13 @@
-// Labels in the three.js viewer: draws the shared label store as HTML markers and turns clicks into geographic points.
+// Labels in the three.js viewer: draws the shared label store (shapes as meshes, names as HTML) and passes pointer input on.
 import { Group } from 'three'
-import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
 import { watch, type ShallowRef } from 'vue'
-import type { GeoPoint, Model3D } from '@/api/types'
+import type { Model3D } from '@/api/types'
 import type { Label } from '@/labels/labelsApi'
 import type { LabelHost } from '@/labels/labelHost'
+import { labelGeometry, nameAnchor, shapesOf } from '@/labels/labelShapes'
 import type { LabelStore } from '@/labels/labelStore'
 import type { ModelViewer } from './ModelViewer'
-
-// the look matches the map viewer's labels: white outlined text on a dark box above an icon or dot, always on top
-const TEXT_STYLE = 'font: 14px sans-serif; color: #fff; background: rgba(0, 0, 0, 0.6); padding: 1px 4px; border-radius: 3px; white-space: nowrap; text-shadow: 0 0 3px #000'
+import { html, LABEL_STYLE, objectsFor, removeShapes } from './shapes'
 
 function marker( iconUrl: string | null, color: string ): HTMLElement {
 	if ( iconUrl ) {
@@ -23,6 +21,7 @@ function marker( iconUrl: string | null, color: string ): HTMLElement {
 	return dot
 }
 
+// the look matches the map viewer's labels: white text on a dark box, above an icon or dot for point labels, always on top
 function labelElement( label: Label, onClick: () => void ): HTMLElement {
 	const el = document.createElement( 'div' )
 	el.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; pointer-events: auto'
@@ -30,29 +29,32 @@ function labelElement( label: Label, onClick: () => void ): HTMLElement {
 	el.dataset.labelId = String( label.id )
 	const text = document.createElement( 'span' )
 	text.textContent = label.name
-	text.style.cssText = TEXT_STYLE
-	el.append( text, marker( label.icon_url, '#00bfff' ) )
+	text.style.cssText = LABEL_STYLE
+	el.append( text )
+	if ( label.kind === 'point' ) el.append( marker( label.icon_url, '#00bfff' ) )
+	else el.style.paddingBottom = '12px'
 	el.addEventListener( 'click', onClick )
 	// keep a press on a label from starting a camera drag
 	el.addEventListener( 'pointerdown', e => e.stopPropagation() )
 	return el
 }
 
-/** Draw the store's labels and select one when it is clicked. Returns a function that removes them. */
+/** Draw the store's labels and select one when its name is clicked. Returns a function that removes them. */
 export function drawLabels( viewer: ModelViewer, store: LabelStore ): () => void {
-	const group = new Group()
-	viewer.scene.add( group )
+	let group = new Group()
 	let stopWatching = () => {}
 	let removed = false
 
 	function draw() {
-		for ( const child of [ ...group.children ] ) group.remove( child )
+		removeShapes( group, viewer )
+		group = new Group()
 		for ( const label of store.labels.value ) {
-			const object = new CSS2DObject( labelElement( label, () => { store.selected.value = label } ) )
-			object.position.copy( viewer.geoToLocal( label.position ) )
-			object.center.set( 0.5, 1 )   // the bottom of the icon sits on the point, like a Cesium billboard with verticalOrigin BOTTOM
-			group.add( object )
+			const g = labelGeometry( label )
+			for ( const shape of shapesOf( g ) ) group.add( ...objectsFor( shape, viewer ) )
+			// the bottom of the name (and of a point label's icon) sits on the point, like a Cesium billboard with verticalOrigin BOTTOM
+			group.add( html( labelElement( label, () => { store.selected.value = label } ), nameAnchor( g ), viewer, true ) )
 		}
+		viewer.scene.add( group )
 		viewer.requestRender()
 	}
 
@@ -64,9 +66,7 @@ export function drawLabels( viewer: ModelViewer, store: LabelStore ): () => void
 	return () => {
 		removed = true
 		stopWatching()
-		for ( const child of [ ...group.children ] ) group.remove( child )
-		viewer.scene.remove( group )
-		viewer.requestRender()
+		removeShapes( group, viewer )
 	}
 }
 
@@ -75,25 +75,29 @@ export function threeLabelHost( viewer: ShallowRef<ModelViewer | null>, model: S
 	return {
 		model,
 		notify,
-		onModelClick( fn: ( point: GeoPoint ) => void ) {
+		listen( input ) {
 			const v = viewer.value
 			if ( !v ) return () => {}
-			return v.onClick( e => {
+			// picking only looks at the model, so label shapes in front of it do not catch the pointer
+			const pointAt = ( e: PointerEvent ) => {
 				const p = v.pick( e )
-				if ( p ) fn( v.localToGeo( p ) )
-			} )
+				return p ? v.localToEcef( p ) : null
+			}
+			const stops = [
+				v.onClick( e => { const p = pointAt( e ); if ( p ) input.click( p ) } ),
+				v.onClick( () => input.finish(), 2 ),
+				v.onPointerMove( e => input.move( pointAt( e ) ) ),
+			]
+			return () => stops.forEach( stop => stop() )
 		},
-		showMarker( point ) {
+		draw( shapes ) {
 			const v = viewer.value
 			if ( !v ) return () => {}
-			const object = new CSS2DObject( marker( null, '#ffff00' ) )
-			object.position.copy( v.geoToLocal( point ) )
-			v.scene.add( object )
+			const group = new Group()
+			for ( const shape of shapes ) group.add( ...objectsFor( shape, v ) )
+			v.scene.add( group )
 			v.requestRender()
-			return () => {
-				v.scene.remove( object )
-				v.requestRender()
-			}
+			return () => removeShapes( group, v )
 		},
 	}
 }

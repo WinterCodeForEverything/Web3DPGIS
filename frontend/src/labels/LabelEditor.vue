@@ -1,18 +1,27 @@
 <script setup lang="ts">
-import { inject, onMounted, onUnmounted, ref } from 'vue'
+import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ApiError } from '@/api/http'
+import IconButton from '@/components/IconButton.vue'
+import type { Vec3 } from '@/geo/geometry'
 import { labelsApi } from '@/labels/labelsApi'
-import type { LabelIcon } from '@/labels/labelsApi'
+import type { LabelIcon, LabelKind } from '@/labels/labelsApi'
 import { labelHostKey } from './labelHost'
+import { DEFAULT_COLOR, KINDS, draftShapes, geometryFromClicks, kindInfo, labelInput } from './labelShapes'
 import { labelStoreKey } from './labelStore'
 
-// Place labels on the model (owner only). Works in any viewer that provides a LabelHost; labels are saved immediately.
+// Place labels on the model (owner only): points, 2D shapes and 3D shapes. Works in any viewer that provides a LabelHost;
+// each label is saved as soon as its last point is clicked.
 const host = inject( labelHostKey )!
 const store = inject( labelStoreKey )!
 
+const GROUPS = [ 'Point', '2D', '3D' ] as const
+const kind = ref<LabelKind>( 'point' )
+const info = computed( () => kindInfo( kind.value ) )
 const icons = ref<LabelIcon[]>( [] )
 const iconId = ref<number | null>( null )
 const name = ref( '' )
+const color = ref( DEFAULT_COLOR )
+const height = ref( 10 )
 const placing = ref( false )
 const error = ref( '' )
 
@@ -36,19 +45,72 @@ async function uploadIcon( e: Event ) {
 	}
 }
 
-const stopListening = host.onModelClick( async position => {
-	if ( !placing.value ) return
-	const removeMarker = host.showMarker( position )
+// the shape being clicked, drawn as it grows
+let clicks: Vec3[] = []
+let cursor: Vec3 | null = null
+let eraseDraft = () => {}
+
+function redraw() {
+	eraseDraft()
+	eraseDraft = clicks.length ? host.draw( draftShapes( kind.value, clicks, cursor, height.value, color.value ) ) : () => {}
+}
+
+function resetDraft() {
+	clicks = []
+	cursor = null
+	redraw()
+}
+
+async function save() {
+	const g = geometryFromClicks( kind.value, clicks, height.value, color.value )
+	// the finished shape stays drawn until the saved label replaces it
+	eraseDraft()
+	const erase = g ? host.draw( draftShapes( kind.value, clicks, null, height.value, color.value ) ) : () => {}
+	eraseDraft = () => {}
+	clicks = []
+	cursor = null
+	if ( !g ) return erase()
 	try {
-		await store.create( { name: name.value, icon: iconId.value, position } )
+		await store.create( labelInput( store.modelId, name.value, iconId.value, g ) )
 		host.notify( 'Label saved' )
 	} catch ( err ) {
 		host.notify( err instanceof ApiError ? err.message : String( err ), 'error' )
 	} finally {
-		removeMarker()
+		erase()
 	}
+}
+
+const stopListening = host.listen( {
+	click( p ) {
+		if ( !placing.value ) return
+		clicks.push( p )
+		if ( clicks.length === info.value.clicks ) void save()
+		else redraw()
+	},
+	move( p ) {
+		if ( !placing.value || !clicks.length ) return
+		cursor = p
+		redraw()
+	},
+	finish() {
+		if ( !placing.value || !clicks.length ) return
+		if ( info.value.clicks === undefined && clicks.length >= info.value.minimum ) void save()
+		else resetDraft()
+	},
 } )
-onUnmounted( stopListening )
+onUnmounted( () => {
+	stopListening()
+	eraseDraft()
+} )
+
+// another kind, a new height or colour, or stopping starts the shape again
+watch( [ kind, placing ], resetDraft )
+watch( [ height, color ], redraw )
+
+function choose( k: LabelKind ) {
+	kind.value = k
+	placing.value = true
+}
 
 async function removeAll() {
 	if ( !confirm( `Delete all ${store.labels.value.length} labels on this model?` ) ) return
@@ -57,10 +119,17 @@ async function removeAll() {
 </script>
 
 <template>
+	<div v-for="g in GROUPS" :key="g" class="group">
+		<span class="muted small">{{ g === 'Point' ? 'Point' : `${g} shapes` }}</span>
+		<div class="segmented" role="radiogroup" :aria-label="`${g} labels`">
+			<IconButton v-for="k in KINDS.filter( k => k.group === g )" :key="k.id" :icon="k.icon" :label="k.title" tip="below"
+				:class="{ on: kind === k.id }" role="radio" :aria-checked="kind === k.id" @click="choose( k.id )" />
+		</div>
+	</div>
 	<label class="field">Label text
 		<input v-model="name" placeholder="e.g. Main entrance" maxlength="128" />
 	</label>
-	<div class="field">
+	<div v-if="kind === 'point'" class="field">
 		<span>Icon</span>
 		<div class="icons" role="radiogroup" aria-label="Icon">
 			<button class="icon" :class="{ on: iconId === null }" role="radio" :aria-checked="iconId === null" title="Dot" @click="iconId = null">●</button>
@@ -70,17 +139,26 @@ async function removeAll() {
 		</div>
 		<label class="muted small">Add icon <input type="file" accept="image/*" @change="uploadIcon" /></label>
 	</div>
-	<button :class="placing ? 'primary' : ''" @click="placing = !placing">{{ placing ? 'Click the model to place… (stop)' : 'Place labels' }}</button>
+	<div v-else class="row">
+		<label class="field">Colour <input v-model="color" type="color" class="swatch" /></label>
+		<label v-if="info.hasHeight" class="field">Height (m) <input v-model.number="height" type="number" min="0.1" step="0.5" class="number" /></label>
+	</div>
+	<button :class="placing ? 'primary' : ''" @click="placing = !placing">{{ placing ? `Drawing ${info.title.toLowerCase()} labels… (stop)` : 'Place labels' }}</button>
+	<p v-if="placing" class="muted small">{{ info.hint }}</p>
 	<p v-if="error" class="error">{{ error }}</p>
 	<p class="muted small">{{ store.labels.value.length }} labels on this model. Click a label to see or edit its properties.</p>
 	<button v-if="store.labels.value.length" class="small danger" @click="removeAll">Delete all labels</button>
 </template>
 
 <style scoped>
+.group { display: flex; flex-direction: column; gap: 4px; }
 .icons { display: flex; flex-wrap: wrap; gap: 6px; }
 .icons .icon { width: 40px; height: 40px; padding: 4px; justify-content: center; border-radius: var(--ds-rounded-md); }
 .icons .icon.on { border: 2px solid var(--ds-primary-focus); padding: 3px; }
 .icon img { max-width: 100%; max-height: 100%; }
+.swatch { width: 48px; height: 32px; padding: 2px; }
+.number { width: 90px; }
+.row { gap: 12px; align-items: flex-end; }
 .small { font-size: 13px; }
 p { margin: 0; }
 </style>

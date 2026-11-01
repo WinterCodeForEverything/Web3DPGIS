@@ -2,7 +2,7 @@
 import type { InjectionKey, ShallowRef } from 'vue'
 import type { Model3D } from '@/api/types'
 import type { Vec3 } from '@/geo/geometry'
-import type { Shape } from './measurementShapes'
+import type { Shape } from '@/geo/shapes'
 
 export interface MeasureInput {
 	/** A left click on the model. */

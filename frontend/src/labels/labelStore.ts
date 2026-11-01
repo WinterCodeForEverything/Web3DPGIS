@@ -2,14 +2,10 @@
 // so the 3D model viewer and the map viewer save labels the same way. Viewers only draw them and report clicks.
 import { shallowRef, type InjectionKey, type ShallowRef } from 'vue'
 import { labelsApi } from '@/labels/labelsApi'
-import type { GeoPoint } from '@/api/types'
-import type { Label } from '@/labels/labelsApi'
+import type { Label, LabelInput } from '@/labels/labelsApi'
 
-export interface NewLabel {
-	name: string
-	icon: number | null
-	position: GeoPoint
-}
+/** A label to create on the store's model. */
+export type NewLabel = Omit<LabelInput, 'model'>
 
 export interface LabelStore {
 	readonly modelId: number
@@ -18,6 +14,7 @@ export interface LabelStore {
 	reload(): Promise<void>
 	create( label: NewLabel ): Promise<Label>
 	updateProperties( id: number, properties: Record<string, unknown> ): Promise<void>
+	updateColor( id: number, color: string ): Promise<void>
 	remove( id: number ): Promise<void>
 	removeAll(): Promise<void>
 }
@@ -35,13 +32,18 @@ export function createLabelStore( modelId: number ): LabelStore {
 	}
 
 	async function create( label: NewLabel ) {
-		const saved = await labelsApi.createLabel( { model: modelId, name: label.name.trim() || 'Label', icon: label.icon, position: label.position } )
+		const saved = await labelsApi.createLabel( { ...label, model: modelId, name: label.name.trim() || 'Label' } )
 		await reload()
 		return saved
 	}
 
 	async function updateProperties( id: number, properties: Record<string, unknown> ) {
 		await labelsApi.updateLabel( id, { properties } )
+		await reload()
+	}
+
+	async function updateColor( id: number, color: string ) {
+		await labelsApi.updateLabel( id, { color } )
 		await reload()
 	}
 
@@ -57,5 +59,5 @@ export function createLabelStore( modelId: number ): LabelStore {
 		await reload()
 	}
 
-	return { modelId, labels, selected, reload, create, updateProperties, remove, removeAll }
+	return { modelId, labels, selected, reload, create, updateProperties, updateColor, remove, removeAll }
 }

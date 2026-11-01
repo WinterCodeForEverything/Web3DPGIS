@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Label } from '@/labels/labelsApi'
+import type { Label, LabelInput } from '@/labels/labelsApi'
 
-const server = vi.hoisted( () => ( { labels: [] as Label[], nextId: 1 } ) )
+const { server, here } = vi.hoisted( () => ( { server: { labels: [] as Label[], nextId: 1 }, here: { longitude: 113.26, latitude: 23.13, height: 5 } } ) )
 
 vi.mock( '@/labels/labelsApi', () => ( {
 	labelsApi: {
 		labels: vi.fn( async () => ( { count: server.labels.length, next: null, previous: null, results: [ ...server.labels ] } ) ),
-		createLabel: vi.fn( async ( input: { model: number; name: string; icon: number | null; position: Label['position'] } ) => {
-			const label: Label = { id: server.nextId++, icon_url: null, properties: {}, ...input }
+		createLabel: vi.fn( async ( input: LabelInput ) => {
+			const label: Label = { id: server.nextId++, icon_url: null, properties: {}, points: [], radius: null, height: null, color: '#1e90ff', position: here, ...input }
 			server.labels.push( label )
 			return label
 		} ),
@@ -23,7 +23,6 @@ vi.mock( '@/labels/labelsApi', () => ( {
 const { labelsApi } = await import( './labelsApi' )
 const { createLabelStore } = await import( './labelStore' )
 
-const here = { longitude: 113.26, latitude: 23.13, height: 5 }
 
 describe( 'label store', () => {
 	beforeEach( () => {
@@ -34,20 +33,20 @@ describe( 'label store', () => {
 
 	it( 'saves a new label for its model and reloads the list', async () => {
 		const store = createLabelStore( 7 )
-		await store.create( { name: '  Front door ', icon: null, position: here } )
-		expect( labelsApi.createLabel ).toHaveBeenCalledWith( { model: 7, name: 'Front door', icon: null, position: here } )
+		await store.create( { kind: 'point', name: '  Front door ', icon: null, position: here } )
+		expect( labelsApi.createLabel ).toHaveBeenCalledWith( { model: 7, kind: 'point', name: 'Front door', icon: null, position: here } )
 		expect( store.labels.value.map( l => l.name ) ).toEqual( [ 'Front door' ] )
 	} )
 
 	it( 'names unnamed labels "Label"', async () => {
 		const store = createLabelStore( 7 )
-		await store.create( { name: ' ', icon: 3, position: here } )
+		await store.create( { kind: 'point', name: ' ', icon: 3, position: here } )
 		expect( store.labels.value[0].name ).toBe( 'Label' )
 	} )
 
 	it( 'keeps the selected label in step with the server after editing its properties', async () => {
 		const store = createLabelStore( 7 )
-		const label = await store.create( { name: 'Door', icon: null, position: here } )
+		const label = await store.create( { kind: 'point', name: 'Door', icon: null, position: here } )
 		store.selected.value = store.labels.value[0]
 		await store.updateProperties( label.id, { floor: '1' } )
 		expect( store.selected.value?.properties ).toEqual( { floor: '1' } )
@@ -55,8 +54,8 @@ describe( 'label store', () => {
 
 	it( 'clears the selection when the selected label is deleted', async () => {
 		const store = createLabelStore( 7 )
-		await store.create( { name: 'A', icon: null, position: here } )
-		await store.create( { name: 'B', icon: null, position: here } )
+		await store.create( { kind: 'point', name: 'A', icon: null, position: here } )
+		await store.create( { kind: 'point', name: 'B', icon: null, position: here } )
 		store.selected.value = store.labels.value[0]
 		await store.remove( store.labels.value[0].id )
 		expect( store.selected.value ).toBeNull()

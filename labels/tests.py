@@ -49,3 +49,60 @@ class LabelTests( ModelTestBase ):
 		names = { i['name'] for i in self.as_user( self.alice ).get( '/api/v1/label-icons/' ).data['results'] }
 		self.assertEqual( names, { 'pin' } )
 		self.assertEqual( self.as_user( self.alice ).delete( f'/api/v1/label-icons/{self.icon.pk}/' ).status_code, 403 )
+
+
+class LabelShapeTests( ModelTestBase ):
+	def setUp( self ):
+		super().setUp()
+		self.model = self.make_model( self.alice )
+		self.client = self.as_user( self.alice )
+		self.corners = [ { 'longitude': 113.26, 'latitude': 23.13, 'height': 10 }, { 'longitude': 113.2602, 'latitude': 23.13, 'height': 12 },
+			{ 'longitude': 113.2602, 'latitude': 23.1302, 'height': 11 } ]
+
+	def post( self, **fields ):
+		return self.client.post( '/api/v1/labels/', { 'model': self.model.pk, 'name': 'Shape', **fields }, format = 'json' )
+
+	def test_existing_style_label_is_a_point( self ):
+		r = self.post( position = self.corners[0] )
+		self.assertEqual( r.status_code, 201, r.data )
+		self.assertEqual( ( r.data['kind'], r.data['points'], r.data['radius'], r.data['height'] ), ( 'point', [], None, None ) )
+
+	def test_polygon_is_stored_as_closed_ring_and_named_at_its_middle( self ):
+		r = self.post( kind = 'polygon', points = self.corners, color = '#ff8800' )
+		self.assertEqual( r.status_code, 201, r.data )
+		label = Label.objects.get()
+		self.assertEqual( label.geometry.geom_type, 'Polygon' )
+		self.assertEqual( len( label.geometry.exterior_ring.coords ), 4 )
+		self.assertEqual( r.data['points'], self.corners )
+		self.assertEqual( r.data['color'], '#ff8800' )
+		self.assertAlmostEqual( r.data['position']['longitude'], 113.2601 )
+		self.assertEqual( r.data['position']['height'], 12 )
+
+	def test_wall_needs_two_points_and_a_height( self ):
+		self.assertIn( 'points', self.post( kind = 'wall', points = self.corners[:1], height = 5 ).data )
+		self.assertIn( 'height', self.post( kind = 'wall', points = self.corners[:2] ).data )
+		r = self.post( kind = 'wall', points = self.corners[:2], height = 5 )
+		self.assertEqual( r.status_code, 201, r.data )
+		self.assertEqual( Label.objects.get().geometry.geom_type, 'LineString' )
+
+	def test_round_shapes_need_a_centre_and_their_sizes( self ):
+		centre = self.corners[0]
+		self.assertIn( 'radius', self.post( kind = 'sphere', position = centre ).data )
+		self.assertIn( 'height', self.post( kind = 'cone', position = centre, radius = 3 ).data )
+		self.assertIn( 'height', self.post( kind = 'circle', position = centre, radius = 3, height = 2 ).data )
+		self.assertIn( 'points', self.post( kind = 'circle', position = centre, radius = 3, points = self.corners ).data )
+		self.assertIn( 'position', self.post( kind = 'circle', radius = 3 ).data )
+		r = self.post( kind = 'cylinder', position = centre, radius = 3, height = 8 )
+		self.assertEqual( r.status_code, 201, r.data )
+		self.assertEqual( ( r.data['radius'], r.data['height'] ), ( 3, 8 ) )
+
+	def test_shape_is_fixed_but_name_and_colour_can_change( self ):
+		label_id = self.post( kind = 'polyline', points = self.corners[:2] ).data['id']
+		r = self.client.patch( f'/api/v1/labels/{label_id}/', { 'points': self.corners }, format = 'json' )
+		self.assertEqual( r.status_code, 400 )
+		r = self.client.patch( f'/api/v1/labels/{label_id}/', { 'name': 'Fence', 'color': '#00ff00' }, format = 'json' )
+		self.assertEqual( ( r.status_code, r.data['name'], r.data['color'] ), ( 200, 'Fence', '#00ff00' ) )
+		self.assertEqual( len( r.data['points'] ), 2 )
+
+	def test_invalid_colour( self ):
+		self.assertIn( 'color', self.post( position = self.corners[0], color = 'red' ).data )

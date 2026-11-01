@@ -6,6 +6,7 @@ import {
 	boundsCentre, circle, ecefToGeodetic, formatArea, formatLength, midpoint, polygonArea, polylineLength, segmentLengths,
 	surfaceArea, triangle, upAt, type Vec3,
 } from '@/geo/geometry'
+import type { Shape } from '@/geo/shapes'
 
 export type Mode = 'point' | 'distance' | 'area' | 'triangle' | 'circle'
 
@@ -31,16 +32,6 @@ export const MODES: ModeInfo[] = [
 
 export const modeInfo = ( id: Mode ) => MODES.find( m => m.id === id )!
 export const modeOfKind = ( kind: MeasurementKind ) => MODES.find( m => m.kind === kind )!.id
-
-export type LineColor = 'yellow' | 'blue' | 'green'
-
-/** Something a viewer draws. */
-export type Shape =
-	| { type: 'mark'; at: Vec3 }
-	| { type: 'line'; points: Vec3[]; color: LineColor }
-	| { type: 'label'; at: Vec3; text: string }
-	| { type: 'polygon'; points: Vec3[] }
-	| { type: 'circle'; centre: Vec3; radius: number }
 
 /** A segment of a path being measured: the line and its length at its middle. */
 export function segmentShapes( a: Vec3, b: Vec3 ): Shape[] {

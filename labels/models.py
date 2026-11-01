@@ -14,12 +14,30 @@ class LabelIcon( models.Model ):
 
 
 class Label( models.Model ):
-	"""A named marker pinned to a point on a model."""
+	"""A named marker or shape on a model: a point, a 2D shape (polyline, polygon, circle) or a 3D one (wall, sphere,
+	cylinder, cone). See labels.geometry for how each kind uses `position`, `geometry`, `radius` and `height`."""
+
+	class Kind( models.TextChoices ):
+		POINT = 'point', 'Point'
+		POLYLINE = 'polyline', 'Polyline'
+		POLYGON = 'polygon', 'Polygon'
+		CIRCLE = 'circle', 'Circle'
+		WALL = 'wall', 'Wall'
+		SPHERE = 'sphere', 'Sphere'
+		CYLINDER = 'cylinder', 'Cylinder'
+		CONE = 'cone', 'Cone'
+
 	name = models.CharField( max_length = 128 )
 	model = models.ForeignKey( Model3D, related_name = 'labels', on_delete = models.CASCADE )
+	kind = models.CharField( max_length = 16, choices = Kind.choices, default = Kind.POINT )
 	icon = models.ForeignKey( LabelIcon, related_name = 'labels', on_delete = models.SET_NULL, null = True, blank = True )
 	# longitude, latitude, ellipsoidal height (metres)
 	position = models.PointField( srid = 4326, dim = 3, spatial_index = True )
+	# the vertices of polylines, polygons and walls (EPSG:4326, 3D)
+	geometry = models.GeometryField( srid = 4326, dim = 3, null = True, blank = True )
+	radius = models.FloatField( null = True, blank = True )
+	height = models.FloatField( null = True, blank = True )
+	color = models.CharField( max_length = 7, default = '#1e90ff' )
 	properties = models.JSONField( default = dict, blank = True )
 
 	class Meta:

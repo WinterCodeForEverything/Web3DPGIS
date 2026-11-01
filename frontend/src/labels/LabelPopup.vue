@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { inject, ref, watch } from 'vue'
+import { computed, inject, ref, watch } from 'vue'
 import { ApiError } from '@/api/http'
 import { labelHostKey } from './labelHost'
+import { describeLabel, labelGeometry } from './labelShapes'
 import { labelStoreKey } from './labelStore'
 
-// Shows the clicked label's properties; the model's owner can edit or delete it. The same popup is used by every viewer.
+// Shows the clicked label's shape and properties; the model's owner can edit, recolour or delete it. The same popup is used by every viewer.
 const host = inject( labelHostKey )!
 const store = inject( labelStoreKey )!
 const rows = ref<{ key: string; value: string }[]>( [] )
@@ -16,6 +17,18 @@ watch( () => store.selected.value, label => {
 	error.value = ''
 	rows.value = Object.entries( label?.properties ?? {} ).map( ( [ key, value ] ) => ( { key, value: typeof value === 'string' ? value : JSON.stringify( value ) } ) )
 }, { immediate: true } )
+
+const summary = computed( () => store.selected.value ? describeLabel( labelGeometry( store.selected.value ) ) : '' )
+
+async function recolour( e: Event ) {
+	const label = store.selected.value
+	if ( !label ) return
+	try {
+		await store.updateColor( label.id, ( e.target as HTMLInputElement ).value )
+	} catch ( err ) {
+		error.value = err instanceof ApiError ? err.message : String( err )
+	}
+}
 
 async function save() {
 	const label = store.selected.value
@@ -44,6 +57,12 @@ async function remove() {
 			<span class="spacer" />
 			<button class="icon-circle" aria-label="Close" @click="store.selected.value = null">✕</button>
 		</header>
+		<div class="row">
+			<span class="muted small">{{ summary }}</span>
+			<span class="spacer" />
+			<input v-if="store.selected.value.kind !== 'point' && host.model.value?.can_edit" type="color" class="swatch"
+				:value="store.selected.value.color" aria-label="Colour" title="Colour" @change="recolour" />
+		</div>
 		<table v-if="!editing && rows.length" class="data">
 			<tr v-for="r in rows" :key="r.key"><th>{{ r.key }}</th><td>{{ r.value }}</td></tr>
 		</table>
@@ -72,4 +91,6 @@ async function remove() {
 <style scoped>
 .popup { position: absolute; top: 12px; right: 12px; width: 300px; z-index: 3; border: 1px solid var(--ds-hairline);
 	border-radius: var(--ds-rounded-lg); padding: 17px; display: flex; flex-direction: column; gap: 8px; }
+.swatch { width: 36px; height: 26px; padding: 2px; }
+.small { font-size: 13px; }
 </style>

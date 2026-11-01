@@ -10,5 +10,5 @@ class LabelIconAdmin( admin.ModelAdmin ):
 
 @admin.register( Label )
 class LabelAdmin( admin.GISModelAdmin ):
-	list_display = ( 'name', 'model', 'icon' )
-	list_filter = ( 'model', )
+	list_display = ( 'name', 'kind', 'model', 'icon' )
+	list_filter = ( 'kind', 'model' )

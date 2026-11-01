@@ -1,11 +1,16 @@
-// Labels in the Cesium viewer: draws the shared label store and turns clicks into geographic points for the shared editor.
+// Labels in the Cesium viewer: draws the shared label store and passes pointer input on the model to the shared editor.
 import * as Cesium from 'cesium'
 import { watch } from 'vue'
 import type { LabelHost } from '@/labels/labelHost'
+import { labelGeometry, nameAnchor, shapesOf } from '@/labels/labelShapes'
 import type { LabelStore } from '@/labels/labelStore'
-import { fromGeoPoint, pickPoint, drawStyle, toGeoPoint, type MapViewerContext } from './mapViewer'
+import { pickPoint, drawStyle, renderBriefly, toVec3, type MapViewerContext } from './mapViewer'
+import { entityOptions } from './shapes'
 
-/** Draw the store's labels and select one when it is clicked. Returns a function that removes them. */
+// every entity of a label has an id starting with label-<id>: its name is label-<id>, its shape parts label-<id>/<n>
+const LABEL_ID = /^label-(\d+)(\/|$)/
+
+/** Draw the store's labels and select one when any part of it is clicked. Returns a function that removes them. */
 export function drawLabels( viewer: Cesium.Viewer, store: LabelStore ): () => void {
 	const source = new Cesium.CustomDataSource( 'labels' )
 	void viewer.dataSources.add( source )
@@ -13,17 +18,20 @@ export function drawLabels( viewer: Cesium.Viewer, store: LabelStore ): () => vo
 	function draw() {
 		source.entities.removeAll()
 		for ( const label of store.labels.value ) {
+			const g = labelGeometry( label )
+			shapesOf( g ).forEach( ( shape, n ) => source.entities.add( { ...entityOptions( shape ), id: `label-${label.id}/${n}` } ) )
+			const point = label.kind === 'point'
 			source.entities.add( {
 				id: `label-${label.id}`,
-				position: fromGeoPoint( label.position ),
-				billboard: label.icon_url
+				position: new Cesium.Cartesian3( ...nameAnchor( g ) ),
+				billboard: point && label.icon_url
 					? { image: label.icon_url, width: 28, height: 28, verticalOrigin: Cesium.VerticalOrigin.BOTTOM, disableDepthTestDistance: Number.POSITIVE_INFINITY }
 					: undefined,
-				point: label.icon_url ? undefined : { ...drawStyle.point, color: Cesium.Color.DEEPSKYBLUE },
-				label: { ...drawStyle.label, text: label.name, pixelOffset: new Cesium.Cartesian2( 0, label.icon_url ? -32 : -12 ) },
+				point: point && !label.icon_url ? { ...drawStyle.point, color: Cesium.Color.DEEPSKYBLUE } : undefined,
+				label: { ...drawStyle.label, text: label.name, pixelOffset: new Cesium.Cartesian2( 0, point && label.icon_url ? -32 : -12 ) },
 			} )
 		}
-		viewer.scene.requestRender()
+		renderBriefly( viewer )
 	}
 	const stopWatching = watch( store.labels, draw, { immediate: true } )
 
@@ -32,9 +40,8 @@ export function drawLabels( viewer: Cesium.Viewer, store: LabelStore ): () => vo
 	handler.setInputAction( ( e: { position: Cesium.Cartesian2 } ) => {
 		const picked = viewer.scene.pick( e.position )
 		const id = picked?.id instanceof Cesium.Entity ? picked.id.id : ''
-		if ( typeof id === 'string' && id.startsWith( 'label-' ) ) {
-			store.selected.value = store.labels.value.find( l => `label-${l.id}` === id ) ?? null
-		}
+		const match = typeof id === 'string' ? LABEL_ID.exec( id ) : null
+		if ( match ) store.selected.value = store.labels.value.find( l => l.id === Number( match[1] ) ) ?? null
 	}, Cesium.ScreenSpaceEventType.LEFT_CLICK )
 
 	return () => {
@@ -49,21 +56,27 @@ export function cesiumLabelHost( ctx: MapViewerContext ): LabelHost {
 	return {
 		model: ctx.model,
 		notify: ctx.notify,
-		onModelClick( fn ) {
+		listen( input ) {
 			const viewer = ctx.viewer
 			const handler = new Cesium.ScreenSpaceEventHandler( viewer.scene.canvas )
+			const pointAt = ( position: Cesium.Cartesian2 ) => {
+				const p = pickPoint( viewer, position )
+				return p ? toVec3( p ) : null
+			}
 			handler.setInputAction( ( e: { position: Cesium.Cartesian2 } ) => {
-				const p = pickPoint( viewer, e.position )
-				if ( p ) fn( toGeoPoint( p ) )
+				const p = pointAt( e.position )
+				if ( p ) input.click( p )
 			}, Cesium.ScreenSpaceEventType.LEFT_CLICK )
+			handler.setInputAction( ( e: { endPosition: Cesium.Cartesian2 } ) => input.move( pointAt( e.endPosition ) ), Cesium.ScreenSpaceEventType.MOUSE_MOVE )
+			handler.setInputAction( () => input.finish(), Cesium.ScreenSpaceEventType.RIGHT_CLICK )
 			return () => { if ( !handler.isDestroyed() ) handler.destroy() }
 		},
-		showMarker( point ) {
+		draw( shapes ) {
 			const viewer = ctx.viewer
-			const marker = viewer.entities.add( { position: fromGeoPoint( point ), point: drawStyle.point } )
+			const entities = shapes.map( shape => viewer.entities.add( entityOptions( shape ) ) )
 			viewer.scene.requestRender()
 			return () => {
-				viewer.entities.remove( marker )
+				for ( const e of entities ) viewer.entities.remove( e )
 				viewer.scene.requestRender()
 			}
 		},
