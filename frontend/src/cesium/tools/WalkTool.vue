@@ -31,8 +31,18 @@ function onKey( e: KeyboardEvent ) {
 	}
 }
 
-function step( _: Cesium.Scene, time: Cesium.JulianDate ) {
-	const now = Cesium.JulianDate.toDate( time ).getTime()
+// The surface under a spot: the top of the model (or anything else drawn there) or the map, whichever is higher, so
+// a model lifted above the map is walked on, not under. Undefined where nothing is loaded to sample.
+function surfaceHeight( carto: Cesium.Cartographic ): number | undefined {
+	const onScene = scene.sampleHeightSupported ? scene.sampleHeight( carto ) : undefined
+	const onMap = scene.globe.getHeight( carto )
+	if ( onScene === undefined ) return onMap
+	return onMap === undefined ? onScene : Math.max( onScene, onMap )
+}
+
+function step() {
+	// wall-clock time: the viewer's clock does not run (no animation), so scene time stands still
+	const now = performance.now()
 	const dt = lastTime ? Math.min( ( now - lastTime ) / 1000, 0.1 ) : 0
 	lastTime = now
 	if ( !walking.value || !dt ) return
@@ -53,7 +63,7 @@ function step( _: Cesium.Scene, time: Cesium.JulianDate ) {
 	const next = Cesium.Cartesian3.add( camera.positionWC, move, new Cesium.Cartesian3() )
 	const carto = Cesium.Cartographic.fromCartesian( next )
 	const climb = ( keys.has( 'e' ) ? 1 : 0 ) - ( keys.has( 'q' ) ? 1 : 0 )
-	const ground = scene.sampleHeightSupported ? scene.sampleHeight( carto ) : undefined
+	const ground = surfaceHeight( carto )
 	if ( climb ) eyeHeight.value = Math.max( 0.3, eyeHeight.value + climb * distance )
 	carto.height = ground !== undefined ? ground + eyeHeight.value : carto.height + climb * distance
 	camera.setView( { destination: Cesium.Cartographic.toCartesian( carto ), orientation: { heading: camera.heading, pitch: camera.pitch, roll: 0 } } )
@@ -62,13 +72,17 @@ function step( _: Cesium.Scene, time: Cesium.JulianDate ) {
 const handler = session.handler()
 handler.setInputAction( ( e: { position: Cesium.Cartesian2 } ) => {
 	if ( walking.value ) { dragging = e.position.clone(); return }
+	const onModel = Cesium.defined( scene.pick( e.position ) )
 	const p = pickPoint( viewer, e.position )
 	if ( !p ) return
 	const carto = Cesium.Cartographic.fromCartesian( p )
+	// a click that missed the model lands on the map; stand on whatever is highest there instead of under the model
+	if ( !onModel ) carto.height = Math.max( carto.height, surfaceHeight( carto ) ?? carto.height )
 	carto.height += eyeHeight.value
 	camera.setView( { destination: Cesium.Cartographic.toCartesian( carto ), orientation: { heading: camera.heading, pitch: 0, roll: 0 } } )
 	controller.enableInputs = false
 	scene.requestRenderMode = false
+	lastTime = 0
 	walking.value = true
 }, Cesium.ScreenSpaceEventType.LEFT_DOWN )
 handler.setInputAction( ( e: { endPosition: Cesium.Cartesian2 } ) => {
