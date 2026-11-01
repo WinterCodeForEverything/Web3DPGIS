@@ -4,8 +4,8 @@ import IconButton from '@/components/IconButton.vue'
 import HeightTool from './tools/HeightTool.vue'
 import { mapViewerKey } from './mapViewer'
 
-// The column of round buttons above Cesium's full-screen button: Height (owners only), then Reset view.
-// Height opens its panel to the left of the column; closing it puts an unsaved height back.
+// The column of round buttons above Cesium's full-screen button: Adjust model height (owners only), then Reset view.
+// Adjust model height opens its panel to the left of the column; closing it puts an unsaved height back.
 defineProps<{ resetView: () => void }>()
 const ctx = inject( mapViewerKey )!
 const heightOpen = ref( false )
@@ -13,14 +13,14 @@ const heightOpen = ref( false )
 
 <template>
 	<div class="corner" aria-label="View">
-		<IconButton v-if="ctx.model.value.can_edit" class="round frost" icon="height" label="Height" tip="left" :on="heightOpen" @click="heightOpen = !heightOpen" />
+		<IconButton v-if="ctx.model.value.can_edit" class="round frost" icon="height" label="Adjust model height" tip="left" :on="heightOpen" @click="heightOpen = !heightOpen" />
 		<IconButton class="round frost" icon="resetView" label="Reset view" tip="left" @click="resetView" />
 	</div>
-	<section v-if="heightOpen" class="panel glass height-panel" aria-label="Height">
+	<section v-if="heightOpen" class="panel glass height-panel" aria-label="Adjust model height">
 		<header class="row">
-			<h2 style="margin: 0">Height</h2>
+			<h2 style="margin: 0">Adjust model height</h2>
 			<span class="spacer" />
-			<button class="icon-circle" aria-label="Close height" @click="heightOpen = false">✕</button>
+			<button class="icon-circle" aria-label="Close Adjust model height" @click="heightOpen = false">✕</button>
 		</header>
 		<HeightTool />
 	</section>

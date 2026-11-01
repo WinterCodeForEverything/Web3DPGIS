@@ -224,7 +224,7 @@ try {
 	await page.click( '.popup button[aria-label=Close]' )
 
 	// 7. height offset
-	await clickText( 'Height' )
+	await clickText( 'Adjust model height' )
 	await page.$eval( '.panel input[type=number]', el => { el.value = '5'; el.dispatchEvent( new Event( 'input' ) ) } )
 	await clickText( 'Save' )
 	await sleep( 800 )
