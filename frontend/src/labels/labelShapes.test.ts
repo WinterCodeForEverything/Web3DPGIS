@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { distance, ecefToGeodetic, enuBasis, geodeticToEcef, type Vec3 } from '@/geo/geometry'
-import { describeLabel, draftShapes, geometryFromClicks, labelGeometry, labelInput, iconAnchor, shapesOf } from './labelShapes'
+import { defaultName, describeLabel, draftShapes, geometryFromClicks, labelGeometry, labelInput, iconAnchor, shapesOf } from './labelShapes'
 
 const base = geodeticToEcef( 113.26, 23.13, 10 )
 function at( e: number, n: number, u = 0 ): Vec3 {
@@ -74,5 +74,14 @@ describe( 'label shapes', () => {
 		expect( draftShapes( 'circle', [ base ], at( 5, 0 ), 10, '#ff0000' ).map( s => s.type ) ).toEqual( [ 'mark', 'circle' ] )
 		expect( draftShapes( 'polygon', [ base ], at( 5, 0 ), 10, '#ff0000' ).map( s => s.type ) ).toEqual( [ 'mark', 'line' ] )
 		expect( draftShapes( 'polygon', [ base, at( 5, 0 ) ], at( 5, 5 ), 10, '#ff0000' ).map( s => s.type ) ).toEqual( [ 'mark', 'mark', 'polygon', 'line' ] )
+	} )
+
+	it( 'a new label is named after its kind with the next number, skipping names already taken', () => {
+		expect( defaultName( 'circle', [] ) ).toBe( 'Circle 1' )
+		const labels = [ { kind: 'circle' as const, name: 'Circle 1' }, { kind: 'circle' as const, name: 'Pond' }, { kind: 'point' as const, name: 'Gate' } ]
+		expect( defaultName( 'circle', labels ) ).toBe( 'Circle 3' )
+		expect( defaultName( 'point', labels ) ).toBe( 'Point 2' )
+		// Circle 1 was deleted after Circle 2 was added: two circles remain, and Circle 3 is taken
+		expect( defaultName( 'circle', [ { kind: 'circle', name: 'Circle 2' }, { kind: 'circle', name: 'Circle 3' } ] ) ).toBe( 'Circle 4' )
 	} )
 } )

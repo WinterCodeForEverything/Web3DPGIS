@@ -7,25 +7,25 @@ import { labelsApi } from '@/labels/labelsApi'
 import type { LabelIcon, LabelKind } from '@/labels/labelsApi'
 import { DEFAULT_ICON_URL } from './defaultIcon'
 import { labelHostKey } from './labelHost'
-import { DEFAULT_COLOR, KINDS, draftShapes, geometryFromClicks, kindInfo, labelInput } from './labelShapes'
+import { DEFAULT_COLOR, KINDS, defaultName, draftShapes, geometryFromClicks, kindInfo, labelInput } from './labelShapes'
 import { labelStoreKey } from './labelStore'
 
-// Place labels on the model (owner only): points, 2D shapes and 3D shapes, each with an icon (on the point, at the centre
-// of a 2D shape, on top of a 3D one). Works in any viewer that provides a LabelHost; a label is saved as soon as its
-// last point is clicked.
+// Add labels to the model (owner only): points, 2D shapes and 3D shapes, each with an icon (on the point, at the centre
+// of a 2D shape, on top of a 3D one). Choosing a kind adds one label of it: once its last point is clicked it is saved
+// under a default name ("Circle 3"), the choice is cleared, and its details panel opens for a name and properties.
+// Works in any viewer that provides a LabelHost.
 const host = inject( labelHostKey )!
 const store = inject( labelStoreKey )!
 
 const GROUPS = [ 'Point', '2D', '3D' ] as const
-const kind = ref<LabelKind>( 'point' )
-const info = computed( () => kindInfo( kind.value ) )
-const iconWhere = computed( () => ( { Point: 'on the point', '2D': 'at the centre of the shape', '3D': 'on top of the shape' } )[ info.value.group ] )
+// the kind being added; null when none is chosen
+const kind = ref<LabelKind | null>( null )
+const info = computed( () => kind.value ? kindInfo( kind.value ) : null )
+const iconWhere = computed( () => info.value ? ( { Point: 'on the point', '2D': 'at the centre of the shape', '3D': 'on top of the shape' } )[ info.value.group ] : '' )
 const icons = ref<LabelIcon[]>( [] )
 const iconId = ref<number | null>( null )
-const name = ref( '' )
 const color = ref( DEFAULT_COLOR )
 const height = ref( 10 )
-const placing = ref( false )
 const error = ref( '' )
 const uploading = ref( false )
 
@@ -62,7 +62,7 @@ let eraseDraft = () => {}
 
 function redraw() {
 	eraseDraft()
-	eraseDraft = clicks.length ? host.draw( draftShapes( kind.value, clicks, cursor, height.value, color.value ) ) : () => {}
+	eraseDraft = kind.value && clicks.length ? host.draw( draftShapes( kind.value, clicks, cursor, height.value, color.value ) ) : () => {}
 }
 
 function resetDraft() {
@@ -71,18 +71,21 @@ function resetDraft() {
 	redraw()
 }
 
-async function save() {
-	const g = geometryFromClicks( kind.value, clicks, height.value, color.value )
+/** The label's last point was clicked: save it, clear the choice of kind and open the new label's details panel. */
+async function save( k: LabelKind ) {
+	const g = geometryFromClicks( k, clicks, height.value, color.value )
 	// the finished shape stays drawn until the saved label replaces it
 	eraseDraft()
-	const erase = g ? host.draw( draftShapes( kind.value, clicks, null, height.value, color.value ) ) : () => {}
+	const erase = g ? host.draw( draftShapes( k, clicks, null, height.value, color.value ) ) : () => {}
 	eraseDraft = () => {}
 	clicks = []
 	cursor = null
+	kind.value = null
 	if ( !g ) return erase()
 	try {
-		await store.create( labelInput( store.modelId, name.value, iconId.value, g ) )
-		host.notify( 'Label saved' )
+		const saved = await store.create( labelInput( store.modelId, defaultName( k, store.labels.value ), iconId.value, g ) )
+		store.justCreated.value = saved.id
+		store.selected.value = store.labels.value.find( l => l.id === saved.id ) ?? null
 	} catch ( err ) {
 		host.notify( err instanceof ApiError ? err.message : String( err ), 'error' )
 	} finally {
@@ -92,19 +95,22 @@ async function save() {
 
 const stopListening = host.listen( {
 	click( p ) {
-		if ( !placing.value ) return
+		const k = kind.value
+		if ( !k ) return
 		clicks.push( p )
-		if ( clicks.length === info.value.clicks ) void save()
+		if ( clicks.length === kindInfo( k ).clicks ) void save( k )
 		else redraw()
 	},
 	move( p ) {
-		if ( !placing.value || !clicks.length ) return
+		if ( !kind.value || !clicks.length ) return
 		cursor = p
 		redraw()
 	},
 	finish() {
-		if ( !placing.value || !clicks.length ) return
-		if ( info.value.clicks === undefined && clicks.length >= info.value.minimum ) void save()
+		const k = kind.value
+		if ( !k || !clicks.length ) return
+		const { clicks: needed, minimum } = kindInfo( k )
+		if ( needed === undefined && clicks.length >= minimum ) void save( k )
 		else resetDraft()
 	},
 } )
@@ -113,13 +119,13 @@ onUnmounted( () => {
 	eraseDraft()
 } )
 
-// another kind, a new height or colour, or stopping starts the shape again
-watch( [ kind, placing ], resetDraft )
+// choosing another kind, or none, starts again; a new height or colour redraws the shape being clicked
+watch( kind, resetDraft )
 watch( [ height, color ], redraw )
 
+/** Choose a kind to add one label of it; choosing it again cancels. */
 function choose( k: LabelKind ) {
-	kind.value = k
-	placing.value = true
+	kind.value = kind.value === k ? null : k
 }
 
 async function removeAll() {
@@ -136,11 +142,8 @@ async function removeAll() {
 				:class="{ on: kind === k.id }" role="radio" :aria-checked="kind === k.id" @click="choose( k.id )" />
 		</div>
 	</div>
-	<label class="field">Label text
-		<input v-model="name" placeholder="e.g. Main entrance" maxlength="128" />
-	</label>
 	<div class="field">
-		<span>Icon <span class="muted small">{{ iconWhere }}</span></span>
+		<span>Icon <span v-if="iconWhere" class="muted small">{{ iconWhere }}</span></span>
 		<div class="icons" role="radiogroup" aria-label="Icon">
 			<button v-for="i in icons" :key="i.id" class="icon" :class="{ on: iconId === i.id }" role="radio" :aria-checked="iconId === i.id" :title="i.name" @click="iconId = i.id">
 				<img :src="i.image" :alt="i.name" />
@@ -154,12 +157,11 @@ async function removeAll() {
 		</div>
 		<span class="muted small">Click + to upload your own icon; it is added to the list for your labels.</span>
 	</div>
-	<div v-if="kind !== 'point'" class="row">
+	<div v-if="kind && kind !== 'point'" class="row">
 		<label class="field">Colour <input v-model="color" type="color" class="swatch" /></label>
-		<label v-if="info.hasHeight" class="field">Height (m) <input v-model.number="height" type="number" min="0.1" step="0.5" class="number" /></label>
+		<label v-if="info?.hasHeight" class="field">Height (m) <input v-model.number="height" type="number" min="0.1" step="0.5" class="number" /></label>
 	</div>
-	<button :class="placing ? 'primary' : ''" @click="placing = !placing">{{ placing ? `Drawing ${info.title.toLowerCase()} labels… (stop)` : 'Place labels' }}</button>
-	<p v-if="placing" class="muted small">{{ info.hint }}</p>
+	<p class="hint" :class="{ active: info }">{{ info ? `Adding a ${info.title.toLowerCase()}: ${info.hint}` : 'Choose a kind of label above, then click the model to add it.' }}</p>
 	<p v-if="error" class="error">{{ error }}</p>
 	<p class="muted small">{{ store.labels.value.length }} labels on this model. Click a label to see or edit its properties.</p>
 	<button v-if="store.labels.value.length" class="small danger" @click="removeAll">Delete all labels</button>
@@ -181,4 +183,6 @@ async function removeAll() {
 .row { gap: 12px; align-items: flex-end; }
 .small { font-size: 13px; }
 p { margin: 0; }
+.hint { font-size: 13px; color: var(--muted); }
+.hint.active { color: inherit; font-weight: 500; }
 </style>

@@ -11,10 +11,13 @@ export interface LabelStore {
 	readonly modelId: number
 	labels: ShallowRef<Label[]>
 	selected: ShallowRef<Label | null>
+	/** The id of a label just added, so its details panel opens ready for a name; the panel clears it. */
+	justCreated: ShallowRef<number | null>
 	reload(): Promise<void>
 	create( label: NewLabel ): Promise<Label>
 	updateProperties( id: number, properties: Record<string, unknown> ): Promise<void>
 	updateColor( id: number, color: string ): Promise<void>
+	update( id: number, changes: Partial<Pick<Label, 'name' | 'color' | 'properties'>> ): Promise<void>
 	remove( id: number ): Promise<void>
 	removeAll(): Promise<void>
 }
@@ -24,6 +27,7 @@ export const labelStoreKey: InjectionKey<LabelStore> = Symbol( 'labels' )
 export function createLabelStore( modelId: number ): LabelStore {
 	const labels = shallowRef<Label[]>( [] )
 	const selected = shallowRef<Label | null>( null )
+	const justCreated = shallowRef<number | null>( null )
 
 	async function reload() {
 		const page = await labelsApi.labels( modelId )
@@ -43,7 +47,11 @@ export function createLabelStore( modelId: number ): LabelStore {
 	}
 
 	async function updateColor( id: number, color: string ) {
-		await labelsApi.updateLabel( id, { color } )
+		await update( id, { color } )
+	}
+
+	async function update( id: number, changes: Partial<Pick<Label, 'name' | 'color' | 'properties'>> ) {
+		await labelsApi.updateLabel( id, changes )
 		await reload()
 	}
 
@@ -59,5 +67,5 @@ export function createLabelStore( modelId: number ): LabelStore {
 		await reload()
 	}
 
-	return { modelId, labels, selected, reload, create, updateProperties, updateColor, remove, removeAll }
+	return { modelId, labels, selected, justCreated, reload, create, updateProperties, updateColor, update, remove, removeAll }
 }

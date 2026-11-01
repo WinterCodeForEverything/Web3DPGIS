@@ -100,26 +100,27 @@ try {
 	const apiLabels = () => page.evaluate( async () => ( await ( await fetch( `/api/v1/labels/?model=${location.pathname.split( '/' )[2]}` ) ).json() ).results )
 
 	// labels in the model viewer use the same editor, popup and API as the map viewer
+	// choosing a kind adds one label of it; once added it is saved as "Point 1" and its panel opens for a name
 	await clickText( 'Labels' )
-	await page.type( 'input[placeholder="e.g. Main entrance"]', 'Lobby' )
-	await clickText( 'Place labels' )
+	await clickText( 'Point' )
 	const stage = await ( await page.$( '.stage canvas' ) ).boundingBox()
 	await page.mouse.click( stage.x + stage.width / 2, stage.y + stage.height / 2 )
-	await page.waitForFunction( () => document.body.textContent.includes( '1 labels on this model' ), { timeout: 10000 } ).catch( () => {} )
-	const [ lobby ] = await apiLabels()
+	const nameInput = '.popup input[aria-label="Label name"]'
+	await page.waitForSelector( nameInput, { timeout: 10000 } ).catch( () => {} )
+	const [ placed ] = await apiLabels()
 	// the cube is 20 m wide and placed at 113.26, 23.13, so a point on it is within ~0.0003° and 0–20 m up
-	check( 'model viewer: label placed on the model and saved', lobby?.name === 'Lobby' && Math.abs( lobby.position.longitude - 113.26 ) < 0.0005
-		&& Math.abs( lobby.position.latitude - 23.13 ) < 0.0005 && lobby.position.height > -1 && lobby.position.height < 21, JSON.stringify( lobby?.position ) )
-	await page.waitForSelector( '.model-label', { timeout: 10000 } )
-	await page.click( '.model-label' )
-	await page.waitForSelector( '.popup', { timeout: 5000 } )
-	await clickText( 'Edit properties' )
+	check( 'model viewer: label placed on the model and saved with its default name', placed?.name === 'Point 1' && Math.abs( placed.position.longitude - 113.26 ) < 0.0005
+		&& Math.abs( placed.position.latitude - 23.13 ) < 0.0005 && placed.position.height > -1 && placed.position.height < 21, JSON.stringify( placed ) )
+	check( 'model viewer: the chosen kind is cleared after adding', !( await page.$( '.panel .icon-button.on' ) ) )
+	await page.click( nameInput, { clickCount: 3 } )
+	await page.type( nameInput, 'Lobby' )
 	await clickText( 'Add property' )
 	await page.type( '.popup input[aria-label="Property name"]', 'floor' )
 	await page.type( '.popup input[aria-label="Property value"]', '1' )
 	await clickText( 'Save' )
 	await page.waitForFunction( () => document.querySelector( '.popup table' )?.textContent.includes( 'floor' ), { timeout: 5000 } ).catch( () => {} )
-	check( 'model viewer: label properties edited and saved', ( await apiLabels() )[0]?.properties?.floor === '1', JSON.stringify( ( await apiLabels() )[0]?.properties ) )
+	const [ lobby ] = await apiLabels()
+	check( 'model viewer: label named and its properties saved', lobby?.name === 'Lobby' && lobby?.properties?.floor === '1', JSON.stringify( lobby ) )
 	await shot( '1-model-viewer-labels.png' )
 	await page.click( '.popup button[aria-label=Close]' )
 
@@ -209,12 +210,18 @@ try {
 
 	// 6. labels
 	await clickText( 'Labels' )
-	await page.type( 'input[placeholder="e.g. Main entrance"]', 'Front door' )
-	await clickText( 'Place labels' )
+	await clickText( 'Point' )
 	await canvasClick( 10, 5 )
 	// the label placed in the model viewer is already there, so this is the second
 	await page.waitForFunction( () => document.body.textContent.includes( '2 labels on this model' ), { timeout: 10000 } ).catch( () => {} )
 	check( 'label placed and saved', ( await page.content() ).includes( '2 labels on this model' ) )
+	await page.waitForSelector( nameInput, { timeout: 5000 } ).catch( () => {} )
+	await page.click( nameInput, { clickCount: 3 } )
+	await page.type( nameInput, 'Front door' )
+	await clickText( 'Save' )
+	await page.waitForFunction( async () => ( await ( await fetch( `/api/v1/labels/?model=${location.pathname.split( '/' )[2]}` ) ).json() ).results.some( l => l.name === 'Front door' ), { timeout: 5000 } ).catch( () => {} )
+	check( 'label named in its panel', ( await apiLabels() ).some( l => l.name === 'Front door' ) )
+	await page.click( '.popup button[aria-label=Close]' )
 
 	// 7. height offset
 	await clickText( 'Height' )

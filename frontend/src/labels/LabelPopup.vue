@@ -1,21 +1,36 @@
 <script setup lang="ts">
-import { computed, inject, ref, watch } from 'vue'
+import { computed, inject, nextTick, ref, watch } from 'vue'
 import { ApiError } from '@/api/http'
 import { labelHostKey } from './labelHost'
 import { describeLabel, labelGeometry } from './labelShapes'
 import { labelStoreKey } from './labelStore'
 
-// Shows the clicked label's shape and properties; the model's owner can edit, recolour or delete it. The same popup is used by every viewer.
+// Shows the clicked label's shape and properties; the model's owner can rename, edit, recolour or delete it. It opens ready
+// for editing right after a label is added, so the label can be named; the name is optional and keeps its default
+// ("Circle 3") when left empty. The same popup is used by every viewer.
 const host = inject( labelHostKey )!
 const store = inject( labelStoreKey )!
 const rows = ref<{ key: string; value: string }[]>( [] )
+const name = ref( '' )
+const nameInput = ref<HTMLInputElement>()
 const editing = ref( false )
 const error = ref( '' )
+
+function startEditing() {
+	name.value = store.selected.value?.name ?? ''
+	editing.value = true
+	// ready to type a name over the default one
+	void nextTick( () => nameInput.value?.select() )
+}
 
 watch( () => store.selected.value, label => {
 	editing.value = false
 	error.value = ''
 	rows.value = Object.entries( label?.properties ?? {} ).map( ( [ key, value ] ) => ( { key, value: typeof value === 'string' ? value : JSON.stringify( value ) } ) )
+	if ( label && label.id === store.justCreated.value ) {
+		store.justCreated.value = null
+		startEditing()
+	}
 }, { immediate: true } )
 
 const summary = computed( () => store.selected.value ? describeLabel( labelGeometry( store.selected.value ) ) : '' )
@@ -35,7 +50,8 @@ async function save() {
 	if ( !label ) return
 	const properties = Object.fromEntries( rows.value.filter( r => r.key.trim() ).map( r => [ r.key.trim(), r.value ] ) )
 	try {
-		await store.updateProperties( label.id, properties )
+		// an empty name keeps the one the label has
+		await store.update( label.id, { name: name.value.trim() || label.name, properties } )
 		editing.value = false
 	} catch ( e ) {
 		error.value = e instanceof ApiError ? e.message : String( e )
@@ -68,6 +84,10 @@ async function remove() {
 		</table>
 		<p v-else-if="!editing" class="muted">No properties.</p>
 		<template v-if="editing">
+			<label class="field">Name <span class="muted small">(optional)</span>
+				<input ref="nameInput" v-model="name" :placeholder="store.selected.value.name" maxlength="128" aria-label="Label name" @keydown.enter="save" />
+			</label>
+			<span class="muted small">Properties</span>
 			<div v-for="( r, i ) in rows" :key="i" class="row">
 				<input v-model="r.key" placeholder="Name" aria-label="Property name" style="width: 40%" />
 				<input v-model="r.value" placeholder="Value" aria-label="Property value" style="flex: 1" />
@@ -81,7 +101,7 @@ async function remove() {
 				<button class="small primary" @click="save">Save</button>
 				<button class="small" @click="editing = false">Cancel</button>
 			</template>
-			<button v-else class="small" @click="editing = true">Edit properties</button>
+			<button v-else class="small" @click="startEditing">Edit properties</button>
 			<span class="spacer" />
 			<button class="small danger" @click="remove">Delete</button>
 		</div>

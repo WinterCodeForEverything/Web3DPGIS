@@ -83,6 +83,18 @@ export function geometryFromClicks( kind: LabelKind, clicks: Vec3[], height: num
 	return { ...base, position: boundsCentre( clicks ), points: clicks, radius: 0 }
 }
 
+/**
+ * The name a new label gets: its kind and the next number, e.g. "Circle 3" when the model already has two circles.
+ * A number whose name is already taken (say after a deletion) is skipped.
+ */
+export function defaultName( kind: LabelKind, labels: Pick<Label, 'kind' | 'name'>[] ): string {
+	const title = kindInfo( kind ).title
+	const taken = new Set( labels.map( l => l.name ) )
+	let n = labels.filter( l => l.kind === kind ).length + 1
+	while ( taken.has( `${title} ${n}` ) ) n++
+	return `${title} ${n}`
+}
+
 /** What to send to the API to save a finished label. */
 export function labelInput( model: number, name: string, icon: number | null, g: LabelGeometry ): LabelInput {
 	const input: LabelInput = { model, kind: g.kind, name: name.trim() || kindInfo( g.kind ).title, icon }
