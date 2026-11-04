@@ -203,7 +203,7 @@ services; the end-to-end job keeps its screenshots and logs as a build artifact.
 ## Production
 
 - `cd frontend && npm ci && npm run build`, then `python manage.py collectstatic --noinput`.
-- Run the API with gunicorn behind nginx (`deploy/nginx.conf`) and at least one Celery worker:
+- Run the API with gunicorn behind nginx and at least one Celery worker:
   `celery -A config worker -l info` (thread pool by default; set `CELERY_WORKER_CONCURRENCY` to taste), and on machines with
   COLMAP and OpenMVS a reconstruction worker, `celery -A config worker -Q reconstruction --concurrency 1`.
 - With more than one server, use `STORAGE_BACKEND=s3` so all servers and workers share files (see File storage).
