@@ -1,0 +1,20 @@
+# The web app and API (gunicorn). Threads let a few slow requests (large uploads) wait without blocking the rest.
+[Unit]
+Description=3DPGIS web app (gunicorn)
+After=network.target postgresql.service
+
+[Service]
+User=pgis
+Group=pgis
+WorkingDirectory=/srv/3DPGIS/app
+EnvironmentFile=/srv/3DPGIS/.env
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=full
+ExecStart=/srv/3DPGIS/venv/bin/gunicorn config.wsgi:application \
+	--bind 127.0.0.1:8000 --workers 3 --threads 4 --timeout 300 \
+	--max-requests 1000 --max-requests-jitter 100 --access-logfile -
+
+[Install]
+WantedBy=multi-user.target

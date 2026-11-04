@@ -1,0 +1,7 @@
+[Unit]
+Description=3DPGIS database backup
+
+[Service]
+Type=oneshot
+User=pgis
+ExecStart=/bin/bash /srv/3DPGIS/app/production/backup.sh

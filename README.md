@@ -202,6 +202,10 @@ services; the end-to-end job keeps its screenshots and logs as a build artifact.
 
 ## Production
 
+To install the whole platform on an Ubuntu 24.04 server (HTTPS, uploads, tiling and optionally reconstruction), use the
+scripts in [production/](production/README.md); its README lists the CPU, memory and disk each setup needs.
+What they do, step by step:
+
 - `cd frontend && npm ci && npm run build`, then `python manage.py collectstatic --noinput`.
 - Run the API with gunicorn behind nginx and at least one Celery worker:
   `celery -A config worker -l info` (thread pool by default; set `CELERY_WORKER_CONCURRENCY` to taste), and on machines with

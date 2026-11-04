@@ -1,0 +1,21 @@
+# Background jobs on the default queue: turning uploads into 3D Tiles.
+# CELERY_WORKER_CONCURRENCY in /srv/3DPGIS/.env sets how many run at once (default 2; each can use several GB).
+[Unit]
+Description=3DPGIS processing worker (Celery)
+After=network.target postgresql.service valkey-server.service redis-server.service
+
+[Service]
+User=pgis
+Group=pgis
+WorkingDirectory=/srv/3DPGIS/app
+EnvironmentFile=/srv/3DPGIS/.env
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=full
+ExecStart=/srv/3DPGIS/venv/bin/celery -A config worker -Q celery -n default@%%h -l info
+# let a running conversion finish its step before stopping; an interrupted job is retried
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

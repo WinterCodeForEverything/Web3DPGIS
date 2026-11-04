@@ -1,0 +1,20 @@
+# 3D reconstruction from photos (COLMAP + OpenMVS), one at a time: a single reconstruction can use all CPUs and memory.
+# On a separate reconstruction server (with S3 storage), this is the only service needed there.
+[Unit]
+Description=3DPGIS reconstruction worker (Celery)
+After=network.target postgresql.service valkey-server.service redis-server.service
+
+[Service]
+User=pgis
+Group=pgis
+WorkingDirectory=/srv/3DPGIS/app
+EnvironmentFile=/srv/3DPGIS/.env
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=full
+ExecStart=/srv/3DPGIS/venv/bin/celery -A config worker -Q reconstruction -n reconstruction@%%h --concurrency 1 -l info
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target
